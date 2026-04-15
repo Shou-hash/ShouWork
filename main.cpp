@@ -14,7 +14,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		return 0;
 	}
 
-
 	// 自分で処理しなかったメッセージは、OSの標準処理に任せる
 	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
