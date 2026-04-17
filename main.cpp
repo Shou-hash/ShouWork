@@ -1,5 +1,17 @@
 #include <Windows.h>
-#include<cstdint>
+#include <cstdint>
+#include <string>
+#include <format>
+
+//Log関数の定義
+void Log(const std::string& message) {
+	OutputDebugStringA(message.c_str());
+}
+
+// stringとwstringの相互変換関数
+std::wstring ConvertString(const std::string& str);
+//wstringとstringの相互変換関数
+std::string ConvertString(const std::wstring& str);
 
 //ウィンドウプロシージャ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -23,6 +35,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 {
 	// 出力ウィンドウへの文字出力
 	OutputDebugStringA("Hello, DirectX!\n");
+
+	// 文字列の出力
+	std::string str0{ "STRING!!!" };
+
+	// 数値を文字列に変換して出力
+	std::string str1{ std::to_string(10) };
+
+	// formatの使用例
+	//int enemyHp = 100; // 例
+	//std::string texturePath = "player.png"; // 例
+	//Log(std::format("enemyHp:{},texturePath:{}\n", enemyHp, texturePath));
+
+	std::wstring wstringValue = L"テスト文字列"; // 例
+
+	// wstring->string
+	Log(ConvertString(std::format(L"WSTRING: {}\n", wstringValue)));
 
 	// ウィンドウクラスの設定と登録
 	WNDCLASS wc{};
@@ -51,7 +79,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	// ウィンドウの作成
 	HWND hwnd = CreateWindow(
 		wc.lpszClassName,      // クラス名
-		L"CG2",                // タイトルバーの文字
+		L"LE2C_12_ショウ_ズーウェン",                // タイトルバーの文字
 		WS_OVERLAPPEDWINDOW,   // ウィンドウスタイル
 		CW_USEDEFAULT,         // 表示X座標
 		CW_USEDEFAULT,         // 表示Y座標
@@ -84,4 +112,20 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	}
 
 	return 0;
+}
+
+std::wstring ConvertString(const std::string& str) {
+	if (str.empty()) return std::wstring();
+	int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), NULL, 0);
+	std::wstring result(sizeNeeded, 0);
+	MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), result.data(), sizeNeeded);
+	return result;
+}
+
+std::string ConvertString(const std::wstring& str) {
+	if (str.empty()) return std::string();
+	int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), NULL, 0, NULL, NULL);
+	std::string result(sizeNeeded, 0);
+	WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), result.data(), sizeNeeded, NULL, NULL);
+	return result;
 }
