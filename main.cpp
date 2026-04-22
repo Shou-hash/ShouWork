@@ -5,11 +5,24 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
+#include <d3d12.h>
+#include <dxgi1_6.h>
+#include <cassert>
+
+#pragma region リンカの設定
+
+#pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxgi.lib")
+
+// DXGIファクトリー
+IDXGIFactory7* g_dxgiFactory = nullptr;
+
+#pragma endregion
 
 #pragma region 文字列の出力(stringとwstringの相互変換)
 
 //Log関数の定義
-void Log(std::ostream& os,const std::string& message) 
+void Log(std::ostream& os, const std::string& message)
 {
 	os << message << std::endl;
 	OutputDebugStringA(message.c_str());
@@ -136,6 +149,78 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
+#pragma region DirectX 12の初期化
+
+	// 関数が成功したかどうかを確認するためのマクロ
+	HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&g_dxgiFactory));
+	// 初期化の根本的な部分でエラーが出た場合はプログラムが間違っているか、
+	// どうにもできない場合が多いのでassertにしておく
+	assert(SUCCEEDED(hr));
+
+	// 使用するアダプタ用の変数。最初にnullptrを入れておく
+	IDXGIAdapter4* useAdapter = nullptr;
+
+	// 良い順にアダプタを頼む
+	for (UINT i = 0; g_dxgiFactory->EnumAdapterByGpuPreference(i,
+		DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&useAdapter)) !=
+		DXGI_ERROR_NOT_FOUND; ++i)
+	{
+		// アダプターの情報を取得する
+		DXGI_ADAPTER_DESC3 adapterDesc{};
+		hr = useAdapter->GetDesc3(&adapterDesc);
+		assert(SUCCEEDED(hr)); // 取得できないのは一大事
+
+		// ソフトウェアアダプタでなければ採用！
+		if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
+		{
+			// 採用したアダプタの情報をログに出力。wstringの方なので注意
+			// ※既存のLog関数とlogFileに合わせて出力するようにしています
+			Log(logFile, ConvertString(std::format(L"Use Adapter:{}\n", adapterDesc.Description)));
+			break;
+		}
+		useAdapter = nullptr; // ソフトウェアアダプタの場合は見なかったことにする
+	}
+
+	// 適切なアダプタが見つからなかったので起動できない
+	assert(useAdapter != nullptr);
+
+	ID3D12Device* device = nullptr;
+
+	// 機能レベルとログ出力用の文字列
+	D3D_FEATURE_LEVEL featureLevels[] = {
+		D3D_FEATURE_LEVEL_12_2, 
+		D3D_FEATURE_LEVEL_12_1, 
+		D3D_FEATURE_LEVEL_12_0
+	};
+
+	const char* featureLevelStrings[] = {
+		"12.2", 
+		"12.1", 
+		"12.0" 
+	};
+
+	// 高い順に生成できるか試していく
+	for (size_t i = 0; i < _countof(featureLevels); ++i)
+	{
+		// 採用したアダプターでデバイスを生成
+		hr = D3D12CreateDevice(useAdapter, featureLevels[i], IID_PPV_ARGS(&device));
+
+		// 指定した機能レベルでデバイスが生成できたかを確認
+		if (SUCCEEDED(hr))
+		{
+			// 生成できたのでログ出力を行ってループを抜ける
+			// ※既存のLog関数とlogFileに合わせて出力するようにしています
+			Log(logFile, std::format("FeatureLevel : {}\n", featureLevelStrings[i]));
+			break;
+		}
+	}
+
+	// デバイスの生成がうまくいかなかったので起動できない
+	assert(device != nullptr);
+	Log(logFile, "Complete create D3D12Device!!!\n");// 初期化完了のログをだす
+
+#pragma endregion
+
 	// メインループ
 	MSG msg{};
 
@@ -143,12 +228,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	while (msg.message != WM_QUIT)
 	{
 		// ウィンドウにメッセージが来ているか確認
-		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) 
+		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
-		else 
+		else
 		{
 			// ここにゲームの更新処理や描画処理を入れる
 		}
@@ -159,15 +244,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma region 文字列の出力(stringとwstringの相互変換)
 
-std::wstring ConvertString(const std::string& str) 
+std::wstring ConvertString(const std::string& str)
 {
-	if (str.empty()) 
+	if (str.empty())
 	{
 		return std::wstring();
 	}
 
 	auto sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, reinterpret_cast<const char*>(&str[0]), static_cast<int>(str.size()), NULL, 0);
-	if (sizeNeeded == 0) 
+	if (sizeNeeded == 0)
 	{
 		return std::wstring();
 	}
@@ -176,15 +261,15 @@ std::wstring ConvertString(const std::string& str)
 	return result;
 }
 
-std::string ConvertString(const std::wstring& str) 
+std::string ConvertString(const std::wstring& str)
 {
-	if (str.empty()) 
+	if (str.empty())
 	{
 		return std::string();
 	}
 
 	auto sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), NULL, 0, NULL, NULL);
-	if (sizeNeeded == 0) 
+	if (sizeNeeded == 0)
 	{
 		return std::string();
 	}
