@@ -2,9 +2,16 @@
 #include <cstdint>
 #include <string>
 #include <format>
+#include <filesystem>
+#include <fstream>
+#include <chrono>
+
+#pragma region 文字列の出力(stringとwstringの相互変換)
 
 //Log関数の定義
-void Log(const std::string& message) {
+void Log(std::ostream& os,const std::string& message) 
+{
+	os << message << std::endl;
 	OutputDebugStringA(message.c_str());
 }
 
@@ -12,6 +19,10 @@ void Log(const std::string& message) {
 std::wstring ConvertString(const std::string& str);
 //wstringとstringの相互変換関数
 std::string ConvertString(const std::wstring& str);
+
+#pragma endregion
+
+#pragma region ウィンドウプロシージャの宣言
 
 //ウィンドウプロシージャ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -30,11 +41,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
+#pragma endregion
+
 //Windowsアプリケーションのエントリーポイント(main関数)
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
 	// 出力ウィンドウへの文字出力
 	OutputDebugStringA("Hello, DirectX!\n");
+
+#pragma region 文字列の出力(stringとwstringの相互変換)
 
 	// 文字列の出力
 	std::string str0{ "STRING!!!" };
@@ -47,10 +62,36 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	//std::string texturePath = "player.png"; // 例
 	//Log(std::format("enemyHp:{},texturePath:{}\n", enemyHp, texturePath));
 
+	// ログ出力用のディレクトリを作成
+	std::filesystem::create_directories("logs");
+
+	//現在時刻を取得
+	std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+
+	//ログファイルの名前にコンマ何秒はいらないので、削って秒にする
+	std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>
+		nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
+
+	//日本時間に変換
+	std::chrono::zoned_time localTime{ std::chrono::current_zone(), nowSeconds };
+
+	//ログファイルの名前を作成
+	std::string dateString = std::format("{:%Y%m%d_%H%M%S}", localTime);
+
+	//時刻を使ってファイル名を決定
+	std::string logFilePath = "logs/" + dateString + ".log";
+
+	//ファイルを作って書き込み準備
+	std::ofstream logFile(logFilePath);
+
 	std::wstring wstringValue = L"テスト文字列"; // 例
 
 	// wstring->string
-	Log(ConvertString(std::format(L"WSTRING: {}\n", wstringValue)));
+	Log(logFile, ConvertString(std::format(L"WSTRING: {}\n", wstringValue)));
+
+#pragma endregion
+
+#pragma region ウィンドウの作成
 
 	// ウィンドウクラスの設定と登録
 	WNDCLASS wc{};
@@ -93,6 +134,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	// ウィンドウの表示
 	ShowWindow(hwnd, SW_SHOW);
 
+#pragma endregion
+
 	// メインループ
 	MSG msg{};
 
@@ -113,6 +156,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	return 0;
 }
+
+#pragma region 文字列の出力(stringとwstringの相互変換)
 
 std::wstring ConvertString(const std::string& str) 
 {
@@ -147,3 +192,5 @@ std::string ConvertString(const std::wstring& str)
 	WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.size()), result.data(), sizeNeeded, NULL, NULL);
 	return result;
 }
+
+#pragma endregion
