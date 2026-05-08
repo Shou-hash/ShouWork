@@ -340,6 +340,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	//これから描きこむバックバッファのインデックスを取得
 	UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
+	//描画先のRTVを設定する
+	commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, nullptr);
 	// 画面をクリアする色
 	float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f }; // 未定義だったため追加（色は任意です）
 	commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
@@ -368,13 +370,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	{
 		// デバッグレイヤーを有効にする
 		debugController->EnableDebugLayer();
+
+		// さらにGPUベースの検証を有効にする（追加）
+		debugController->SetEnableGPUBasedValidation(TRUE);
+
 		// 使い終わったら解放する
 		debugController->Release();
 	}
-
-#endif // _DEBUG
-
-#ifdef _DEBUG
 
 	ID3D12InfoQueue* infoQueue = nullptr;
 	if (SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&infoQueue))))
@@ -385,13 +387,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
 		//警告時に止まる
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
-		//解放
-		infoQueue->Release();
 
 		//抑制するメッセージのID
 		D3D12_MESSAGE_ID denyIds[] = {
-		//Windous11でのDXGIデバッグレイヤーとDX12デバッグレイヤーの相性の問題で出るエラー
-		D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
+			//Windows11でのDXGIデバッグレイヤーとDX12デバッグレイヤーの相性の問題で出るエラー
+			D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
 		};
 		//抑制するレベル
 		D3D12_MESSAGE_SEVERITY severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
@@ -400,14 +400,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		filter.DenyList.pIDList = denyIds;
 		filter.DenyList.NumSeverities = _countof(severities);
 		filter.DenyList.pSeverityList = severities;
-		infoQueue->PushStorageFilter(&filter);
+
 		//指定したメッセージの表示を抑制する
 		infoQueue->PushStorageFilter(&filter);
+
+		// 必要な設定がすべて完了してから解放する（移動）
+		infoQueue->Release();
 	}
 
 #endif // _DEBUG
-
-
 
 	uint32_t* p = nullptr;
 
@@ -427,7 +428,53 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		}
 		else
 		{
-			// ここにゲームの更新処理や描画処理を入れる
+			
+			D3D12_RESOURCE_BARRIER barrier{};
+			//今回のバリアはTransition
+			barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			//Noneにしておく
+			barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			//バリアを張る対象のリソース。現在のバックバッファに対して行う
+			barrier.Transition.pResource = swapChainResources[backBufferIndex];
+			//現在の状態はPresentなので、描きこむためにはRenderTargetに遷移させる
+			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+			//遷移後のRenderTarget
+			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+			//TransitionBarrierの張る
+			commandList->ResourceBarrier(1, &barrier);
+
+			//画面に各処理はすべて終わり、画面に映すので、状態を遷移
+			//今回は描きこむためのRenderTargetから、Presentに遷移させる
+			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+			//TransitionBarrierを張る
+			commandList->ResourceBarrier(1, &barrier);
+
+			//初期値０でFenceを作成
+			ID3D12Fence* fence = nullptr;
+			uint64_t fenceValue = 0;
+			hr = device->CreateFence(fenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+			assert(SUCCEEDED(hr));
+
+			//FenceのSignalを待つためのイベントを作成する
+			HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+			assert(fenceEvent != nullptr);
+
+			//Fenceの値を更新
+			fenceValue++;
+			// GPUがここまでたどり着いたときに、Fenceの値を指定した値に代入するようにSignalを送る
+			commandQueue->Signal(fence, fenceValue);
+
+			//Fenceの値が指定したSignal値に辿り着いているか確認する
+			//GetCompletedValueの初期値はFence作成時に渡した初期値
+			if (fence->GetCompletedValue() < fenceValue)
+			{
+				//指定したSignal値にたどり着いていないので、イベントを待つ
+				fence->SetEventOnCompletion(fenceValue, fenceEvent);
+				//イベント待つ
+				WaitForSingleObject(fenceEvent, INFINITE);
+			}
+
 		}
 	}
 
