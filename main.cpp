@@ -206,7 +206,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		// デバッグレイヤーを有効にする
 		debugController->EnableDebugLayer();
 
-		// さらにGPUベースの検証を有効にする（追加）
+		// さらにGPUベースの検証を有効にする
 		debugController->SetEnableGPUBasedValidation(TRUE);
 	}
 
@@ -318,7 +318,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	}
 
 #endif // _DEBUG
-
 
 #pragma region コマンドキューを生成する
 
@@ -483,6 +482,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 		}
 	}
+	CloseHandle(fenceEvent);
+	fence->Release();
 
 	return 0;
 }
