@@ -370,12 +370,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	{
 		// デバッグレイヤーを有効にする
 		debugController->EnableDebugLayer();
-
+		
 		// さらにGPUベースの検証を有効にする（追加）
 		debugController->SetEnableGPUBasedValidation(TRUE);
-
-		// 使い終わったら解放する
-		debugController->Release();
 	}
 
 	ID3D12InfoQueue* infoQueue = nullptr;
@@ -387,11 +384,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
 		//警告時に止まる
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
+		// いらないので解放
+		infoQueue->Release();
 
 		//抑制するメッセージのID
 		D3D12_MESSAGE_ID denyIds[] = {
-			//Windows11でのDXGIデバッグレイヤーとDX12デバッグレイヤーの相性の問題で出るエラー
-			D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
+		//Windows11でのDXGIデバッグレイヤーとDX12デバッグレイヤーの相性の問題で出るエラー
+		D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
 		};
 		//抑制するレベル
 		D3D12_MESSAGE_SEVERITY severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
@@ -400,12 +399,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		filter.DenyList.pIDList = denyIds;
 		filter.DenyList.NumSeverities = _countof(severities);
 		filter.DenyList.pSeverityList = severities;
-
+		
 		//指定したメッセージの表示を抑制する
 		infoQueue->PushStorageFilter(&filter);
 
-		// 必要な設定がすべて完了してから解放する（移動）
-		infoQueue->Release();
 	}
 
 #endif // _DEBUG
