@@ -192,6 +192,34 @@ IDxcBlob* CompileShader(
 
 #pragma endregion
 
+#pragma region RootSignature
+
+D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
+descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+D3D12_ROOT_PARAMETER rootParameters[1] = {};
+rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+rootParameters[0].SHaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+rootParameters[0].Descriptor.ShaderRegister = 0;
+descriptionRootSignature.pParameters = rootParameters;
+descriptionRootSignature.NumParameters = _countof(rootParameters);
+
+ID3D12Resource* CreateBufferResource(ID3D12Device* device, size_t sizeInbytes);
+
+ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(Vector4) * 3);
+
+ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Vector4));
+
+Vector4* materialDeta = nullptr;
+
+materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialDeta));
+
+*materialDeta = Vector4(1.0f, 0.0f, 0.0f, 1.0f);
+
+commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+
+#pragma endregion
+
 //Windowsアプリケーションのエントリーポイント(main関数)
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
@@ -779,6 +807,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	pixelShaderBlob->Release();
 	vertexShaderBlob->Release();
 
+	materialResource->Release();
 
 	return 0;
 }
