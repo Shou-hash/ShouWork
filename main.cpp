@@ -15,6 +15,7 @@
 #include "ConvertString.h"
 #include "Matrix4x4.h"
 #include "Transform.h"
+#include "ImguiCode.h"
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "Dbghelp.lib")
@@ -31,6 +32,23 @@ struct Vector4 {
 
 // DXGIファクトリー
 IDXGIFactory7* dxgiFactory = nullptr;
+
+#pragma endregion
+
+#pragma region imgui関数
+
+ID3D12DescriptorHeap* CreateDescriptorHeap(
+	ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors, bool shadervisible)
+{
+	ID3D12DescriptorHeap* descriptorHeap = nullptr;
+	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc{};
+	descriptorHeapDesc.Type = heapType;
+	descriptorHeapDesc.NumDescriptors = numDescriptors;
+	descriptorHeapDesc.Flags = shadervisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	HRESULT hr = device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&descriptorHeap));
+	assert(SUCCEEDED(hr));
+	return descriptorHeap;
+}
 
 #pragma endregion
 
@@ -60,6 +78,10 @@ std::string ConvertString(const std::wstring& str);
 //ウィンドウプロシージャ
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
+	if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
+		return true;
+	}
+
 	// メッセージ処理
 	switch (msg)
 	{
@@ -424,13 +446,20 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	struct Transform cameraTransform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f} };
 
 	// 各種行列の計算 (projectionMatrix の重複と MakeAffine の間違いを修正)
-	Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
-	Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
+	Matrix4x4 worldMatrix = MakeAffineMatrix(
+		transform.scale, transform.rotate, transform.translate);
+	
+	Matrix4x4 cameraMatrix = MakeAffineMatrix(
+		cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
+	
 	Matrix4x4 viewMatrix = Inverse(cameraMatrix);
-	Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
+	
+	Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(
+		0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 
 	// 合成してWVP行列を求める
-	Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
+	Matrix4x4 worldViewProjectionMatrix = Multiply(
+		worldMatrix, Multiply(viewMatrix, projectionMatrix));
 
 	// 未定義変数だった部分を wvpDayta に修正してデータを転送
 	*wvpDayta = worldViewProjectionMatrix;
@@ -518,6 +547,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	hr = device->CreateDescriptorHeap(&rtvDescriptorHeapDesc, IID_PPV_ARGS(&rtvDescriptorHeap));
 	assert(SUCCEEDED(hr));
 
+	// RTV用のヒープでディスクリプタの数は二、RTVはShader内で触るものではないので、ShaderVisibleはfalse
+	rtvDescriptorHeap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2, false);
+
+	ID3D12DescriptorHeap* srvDescriptorHeap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
+
 	//swapChainDescからResourceを引っ張ってくる
 	ID3D12Resource* swapChainResources[2] = { nullptr }; // backBuffers から変数名を統一
 	hr = swapChain->GetBuffer(0, IID_PPV_ARGS(&swapChainResources[0]));
@@ -571,9 +605,25 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
-	uint32_t* p = nullptr;
+#pragma region Imguiの初期化
 
-	//*p = 100;
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGui::StyleColorsDark();
+	ImGui_ImplWin32_Init(hwnd);
+	ImGui_ImplDX12_Init(device,
+		swapChainDesc.BufferCount,
+		rtvDesc.Format,
+		srvDescriptorHeap,
+		srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+		srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+	ImGuiIO& io = ImGui::GetIO();
+	io.Fonts->Build();
+
+
+#pragma endregion
+
+
 
 	// メインループ
 	MSG msg{};
@@ -731,6 +781,16 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		}
 		else
 		{
+			// ==========================================
+			// 1. ImGuiの新規フレーム受付 (フレームの先頭で行う)
+			// ==========================================
+			ImGui_ImplDX12_NewFrame();
+			ImGui_ImplWin32_NewFrame();
+			ImGui::NewFrame();
+
+			// ==========================================
+			// 2. 更新処理 & ImGuiのUI定義
+			// ==========================================
 			// 毎フレーム回転させる
 			transform.rotate.y += 0.03f;
 
@@ -741,33 +801,37 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			// wvpDaytaに最新の行列を代入
 			*wvpDayta = worldViewProjectionMatrix;
 
-			//これから描きこむバックバッファのインデックスを取得
+			// 【追加】デバッグ用のUIコード（ウィンドウを表示させる）
+			ImGui::ShowDemoWindow();
+
+			// ==========================================
+			// 3. ImGuiの内部描画コマンドを生成
+			// ==========================================
+			ImGui::Render();
+
+			// ------------------------------------------
+			// ここからDirectX12の描画コマンド積み込み開始
+			// ------------------------------------------
+
+			// これから描きこむバックバッファのインデックスを取得
 			UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
 
-			//TransitionBarrierを設定
+			// TransitionBarrierを設定
 			D3D12_RESOURCE_BARRIER barrier{};
-			//今回のバリアはTransition
 			barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-			//Noneにしておく
 			barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-			//バリアを張る対象のリソース。現在のバックバッファに対して行う
 			barrier.Transition.pResource = swapChainResources[backBufferIndex];
-			//現在の状態はPresentなので、描きこむためにはRenderTargetに遷移させる
 			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-			//遷移後のRenderTarget
 			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-			//TransitionBarrierの張る
 			commandList->ResourceBarrier(1, &barrier);
 
-			//描画先のRTVを設定する
+			// 描画先のRTVを設定する
 			commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, nullptr);
-			// 画面をクリアする色
-			float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f }; // 未定義だったため追加（色は任意です）
+			float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
 			commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
 
-			// ビューポート
+			// ビューポート・シザー矩形の設定
 			D3D12_VIEWPORT viewport{};
-			// クライアント領域のサイズと一緒にして画面全体に表示
 			viewport.Width = kClientWidth;
 			viewport.Height = kClientHeight;
 			viewport.TopLeftX = 0;
@@ -775,9 +839,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			viewport.MinDepth = 0.0f;
 			viewport.MaxDepth = 1.0f;
 
-			// シザー矩形
 			D3D12_RECT scissorRect{};
-			// 基本的にビューポートと同じ矩形が構成されるようにする
 			scissorRect.left = 0;
 			scissorRect.right = kClientWidth;
 			scissorRect.top = 0;
@@ -785,54 +847,59 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			commandList->RSSetViewports(1, &viewport);
 			commandList->RSSetScissorRects(1, &scissorRect);
-			// RootSignatureを設定
-			commandList->SetGraphicsRootSignature(rootSignature);
 
+			// ------------------------------------------
+			// 3Dオブジェクトの描画
+			// ------------------------------------------
+			commandList->SetGraphicsRootSignature(rootSignature);
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
-			
 			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
 
 			commandList->SetPipelineState(graphicsPipelineState);
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
-			// 形状を設定
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			// 描画!(DrawCall/ドローコール)。3頂点描画する。1インスタンス
 			commandList->DrawInstanced(3, 1, 0, 0);
 
-			//画面に各処理はすべて終わり、画面に映すので、状態を遷移
-			//今回は描きこむためのRenderTargetから、Presentに遷移させる
+			// ==========================================
+			// 4. ImGuiの描画（一番最前面に映すため最後に行う）
+			// ==========================================
+			// スライドの通り、描画用のDescriptorHeapを再設定する
+			ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap };
+			commandList->SetDescriptorHeaps(1, descriptorHeaps);
+
+			// レンダーターゲットからPresentに遷移させる前（ここ）で描画コマンドを積む
+			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+
+			// ------------------------------------------
+			// 画面表示への遷移
+			// ------------------------------------------
 			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-			//TransitionBarrierを張る
 			commandList->ResourceBarrier(1, &barrier);
 
 			// コマンドリストのクローズ
 			hr = commandList->Close();
 			assert(SUCCEEDED(hr));
 
-			//GPUにコマンドリストを実行させる
+			// GPUにコマンドリストを実行させる
 			ID3D12CommandList* commandLists[] = { commandList };
 			commandQueue->ExecuteCommandLists(1, commandLists);
-			//GPUとOSに画面の交換を行うよう通知する
+
+			// 画面の交換
 			swapChain->Present(1, 0);
 
-			//Fenceの値を更新
+			// フェンス同期
 			fenceValue++;
-			// GPUがここまでたどり着いたときに、Fenceの値を指定した値に代入するようにSignalを送る
 			commandQueue->Signal(fence, fenceValue);
 
-			//Fenceの値が指定したSignal値に辿り着いているか確認する
-			//GetCompletedValueの初期値はFence作成時に渡した初期値
 			if (fence->GetCompletedValue() < fenceValue)
 			{
-				//指定したSignal値にたどり着いていないので、イベントを待つ
 				fence->SetEventOnCompletion(fenceValue, fenceEvent);
-				//イベント待つ
 				WaitForSingleObject(fenceEvent, INFINITE);
 			}
 
-			//次のフレーム用のコマンドリストを準備する
-			hr = commandAllocator->Reset(); // 修正: コマンドリストの前にアロケータをリセット
+			// 次のフレーム用のコマンドリストを準備
+			hr = commandAllocator->Reset();
 			assert(SUCCEEDED(hr));
 			hr = commandList->Reset(commandAllocator, nullptr);
 			assert(SUCCEEDED(hr));
@@ -865,6 +932,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	debugController->Release();
 #endif // _DEBUG
 	CloseWindow(hwnd);
+
+#ifdef USE_IMGUI
+
+	ImGui_ImplDX12_Shutdown();
+	ImGui_ImplWin32_Shutdown();
+	ImGui::DestroyContext();
+
+#endif // USE_IMGUI
 
 	vertexResource->Release();
 	graphicsPipelineState->Release();
