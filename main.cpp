@@ -125,9 +125,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
     Log(logFile, "Complete create D3D12Device!!!\n");
 
     ID3D12Resource* wvpResource = CreateBufferResource(device, sizeof(Matrix4x4));
-    Matrix4x4* wvpDayta = nullptr;
-    wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&wvpDayta));
-    *wvpDayta = MakeIdentity4x4();
+    Matrix4x4* wvpData = nullptr;
+    wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&wvpData));
+    *wvpData = MakeIdentity4x4();
 
     struct Transform transform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
     struct Transform cameraTransform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f} };
@@ -138,7 +138,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
     Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 
     Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-    *wvpDayta = worldViewProjectionMatrix;
+    *wvpData = worldViewProjectionMatrix;
 
 #pragma endregion
 
@@ -272,9 +272,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
     ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * 3);
 
     ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Vector4));
-    Vector4* materialDeta = nullptr;
-    materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialDeta));
-    *materialDeta = Vector4(1.0f, 1.0f, 1.0f, 1.0f); // テクスチャの色をそのまま出すために白(1,1,1,1)を推奨
+    Vector4* materialData = nullptr;
+    materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
+    *materialData = Vector4(1.0f, 1.0f, 1.0f, 1.0f); // テクスチャの色をそのまま出すために白(1,1,1,1)を推奨
 
 #pragma endregion
 
@@ -288,21 +288,26 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
     srvDesc.Format = metadata.format;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = static_cast<UINT>(metadata.mipLevels);
+    srvDesc.Texture2D.MipLevels = UINT(metadata.mipLevels);
 
     // ハンドルの取得（0番目をテクスチャ用にする）
     D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU = srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
     D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+    textureSrvHandleCPU.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    textureSrvHandleGPU.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     device->CreateShaderResourceView(textureResource, &srvDesc, textureSrvHandleCPU);
 
+
+#ifdef USE_IMGUI
     // ImGui用に1つ後ろのハンドルを計算する
     UINT descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     D3D12_CPU_DESCRIPTOR_HANDLE imguiSrvHandleCPU = textureSrvHandleCPU;
     imguiSrvHandleCPU.ptr += descriptorSize;
     D3D12_GPU_DESCRIPTOR_HANDLE imguiSrvHandleGPU = textureSrvHandleGPU;
     imguiSrvHandleGPU.ptr += descriptorSize;
-
+#endif
 #pragma region Imguiの初期化
+#ifdef USE_IMGUI
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -316,7 +321,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
         srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
     ImGuiIO& io = ImGui::GetIO();
     io.Fonts->Build();
-
+#endif // USE_IMGUI
 #pragma endregion
 
     MSG msg{};
@@ -451,11 +456,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
             ImGui_ImplWin32_NewFrame();
             ImGui::NewFrame();
 
-            transform.rotate.y += 0.03f;
+            //transform.rotate.y += 0.03f;
 
             Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
             Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-            *wvpDayta = worldViewProjectionMatrix;
+            *wvpData = worldViewProjectionMatrix;
 
             ImGui::ShowDemoWindow();
             ImGui::Render();
