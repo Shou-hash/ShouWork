@@ -1,6 +1,7 @@
 #include "Common.h"
 #include "WinApp.h"
 #include "DirectXCommon.h"
+#include <numbers>
 
 // DXGIファクトリーの実体定義
 IDXGIFactory7* dxgiFactory = nullptr;
@@ -498,6 +499,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
+#pragma region 描画数値
+
+	// Sprite用の頂点データも同様に設定する
 	VertexData* vertexDataSprite = nullptr;
 	vertexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataSprite));
 
@@ -541,6 +545,71 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	*transformationMatrixDataSprite = worldViewProjectionMatrixSprite;
 
+	// 球の頂点数を計算するための分割数
+	const uint32_t kSubdivision = 16;
+
+	const uint32_t kNumSphereVertices = (kSubdivision) * (kSubdivision) * 6;
+
+	Sphere sphere = { { 0.0f, 0.0f, 0.0f }, 1.0f };
+
+	// 球（Sphere）用のリソース作成
+	ID3D12Resource* vertexResourceSphere3D = CreateBufferResource(device, sizeof(VertexData) * kNumSphereVertices);
+	D3D12_VERTEX_BUFFER_VIEW vertexBufferViewSphere3D{};
+	vertexBufferViewSphere3D.BufferLocation = vertexResourceSphere3D->GetGPUVirtualAddress();
+	vertexBufferViewSphere3D.SizeInBytes = sizeof(VertexData) * kNumSphereVertices;
+	vertexBufferViewSphere3D.StrideInBytes = sizeof(VertexData);
+
+	VertexData* vertexDataSphere3D = nullptr;
+	vertexResourceSphere3D->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataSphere3D));
+
+	// 球用の行列データリソース
+	ID3D12Resource* transformationMatrixResourceSphere3D = CreateBufferResource(device, sizeof(Matrix4x4));
+	Matrix4x4* transformationMatrixDataSphere3D = nullptr;
+	transformationMatrixResourceSphere3D->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixDataSphere3D));
+
+	// 数理的な球の頂点生成アルゴリズム
+	float latStep = std::numbers::pi_v<float> / float(kSubdivision);       // 緯度分割のステップ
+	float lonStep = 2.0f * std::numbers::pi_v<float> / float(kSubdivision); // 経度分割のステップ
+
+	uint32_t sphereVertexIndex = 0;
+
+	for (uint32_t lat = 0; lat < kSubdivision; ++lat) {
+		float lat0 = -std::numbers::pi_v<float> / 2.0f + float(lat) * latStep;
+		float lat1 = lat0 + latStep;
+
+		for (uint32_t lon = 0; lon < kSubdivision; ++lon) {
+			float lon0 = float(lon) * lonStep;
+			float lon1 = lon0 + lonStep;
+
+			// 四角形の4つの頂点のローカル座標を計算
+			// 頂点A (lat0, lon0)
+			Vector4 pA = { cosf(lat0) * cosf(lon0), sinf(lat0), cosf(lat0) * sinf(lon0), 1.0f };
+			// 頂点B (lat1, lon0)
+			Vector4 pB = { cosf(lat1) * cosf(lon0), sinf(lat1), cosf(lat1) * sinf(lon0), 1.0f };
+			// 頂点C (lat0, lon1)
+			Vector4 pC = { cosf(lat0) * cosf(lon1), sinf(lat0), cosf(lat0) * sinf(lon1), 1.0f };
+			// 頂点D (lat1, lon1)
+			Vector4 pD = { cosf(lat1) * cosf(lon1), sinf(lat1), cosf(lat1) * sinf(lon1), 1.0f };
+
+			// UV座標 (簡易的に割り当て。資料のテクスチャマッピングに準拠)
+			float u0 = float(lon) / float(kSubdivision);
+			float u1 = float(lon + 1) / float(kSubdivision);
+			float v0 = 1.0f - float(lat) / float(kSubdivision);
+			float v1 = 1.0f - float(lat + 1) / float(kSubdivision);
+
+			// 三角形1枚目 (A -> B -> C)
+			vertexDataSphere3D[sphereVertexIndex++] = { pA, u0, v0 };
+			vertexDataSphere3D[sphereVertexIndex++] = { pB, u0, v1 };
+			vertexDataSphere3D[sphereVertexIndex++] = { pC, u1, v0 };
+
+			// 三角形2枚目 (C -> B -> D)
+			vertexDataSphere3D[sphereVertexIndex++] = { pC, u1, v0 };
+			vertexDataSphere3D[sphereVertexIndex++] = { pB, u0, v1 };
+			vertexDataSphere3D[sphereVertexIndex++] = { pD, u1, v1 };
+		}
+	}
+
+	// 三角形の頂点データを設定する
 	// 左下 (UV: 0.0, 1.0)
 	vertexData[0].position = { -0.5f, -0.5f, 0.0f, 1.0f };
 	vertexData[0].u = 0.0f; vertexData[0].v = 1.0f;
@@ -565,6 +634,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	vertexData[5].position = { 0.5f, -0.5f, -0.5f, 1.0f };
 	vertexData[5].u = 1.0f; vertexData[5].v = 1.0f;
 
+#pragma endregion
+
+
 	while (msg.message != WM_QUIT)
 	{
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
@@ -578,11 +650,20 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			ImGui_ImplWin32_NewFrame();
 			ImGui::NewFrame();
 
+			// 三角形の回転
 			transform.rotate.y += 0.03f;
+
+			// ★追加：球体も同じ速度でY軸回転させる
+			sphere.rotate.y += 0.03f;
 
 			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 			Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
 			*wvpData = worldViewProjectionMatrix;
+
+			// 球体用のWVP行列更新（★sphereRotate を適用）
+			Matrix4x4 worldMatrixSphere = MakeAffineMatrix({ sphere.radius, sphere.radius, sphere.radius }, sphere.rotate, sphere.center);
+			Matrix4x4 worldViewProjectionMatrixSphere = Multiply(worldMatrixSphere, Multiply(viewMatrix, projectionMatrix));
+			*transformationMatrixDataSphere3D = worldViewProjectionMatrixSphere;
 
 			ImGui::ShowDemoWindow();
 			ImGui::Render();
@@ -632,18 +713,28 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			commandList->SetPipelineState(graphicsPipelineState);
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-			// 1. 3Dオブジェクト（三角形）の描画設定と実行
-			// 各種ルートパラメータの設定（3D用）
-			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress()); // マテリアル(t0)
-			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());       // 3D用のWVP行列
-			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);                         // テクスチャ
-
-			// 3D用の頂点バッファをセットして描画
+			// --- 1. 3Dオブジェクト（三角形）の描画 ---
+			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
+			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
-			commandList->DrawInstanced(6, 1, 0, 0); // 三角形の描画
+			commandList->DrawInstanced(6, 1, 0, 0);
 
-			// スプライト（2D）の描画設定と実行（資料1枚目の通りに実装）
-			// マテリアル(0番)とテクスチャ(2番)は上の3Dと同じものを流用するため、設定をスキップ！
+			// --- 2. 3Dオブジェクト（球体：Sphere）の描画 ---
+			// 修正点：ババイドン不足エラーを防ぐためマテリアルとテクスチャも再設定
+			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+			commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSphere3D->GetGPUVirtualAddress());
+			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSphere3D);
+			commandList->DrawInstanced(kNumSphereVertices, 1, 0, 0);
+
+			// --- 3. 2Dオブジェクト（スプライト）の描画 ---
+			// 修正点：スプライト描画時にもルートパラメータを正しくセット
+			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+			commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
+			commandList->DrawInstanced(6, 1, 0, 0);
 
 			// 変更が必要なものだけを上書きして描画する
 			// ① VBVをスプライト用に変更
@@ -733,6 +824,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	vertexResource->Release();
 	vertexResourceSprite->Release(); 
 	transformationMatrixResourceSprite->Release();
+	// 追加：球体用リソースの解放
+	vertexResourceSphere3D->Release();
+	transformationMatrixResourceSphere3D->Release();
 	graphicsPipelineState->Release();
 	signatureBlob->Release();
 	if (errorBlob)

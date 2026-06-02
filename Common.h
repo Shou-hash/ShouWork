@@ -37,5 +37,11 @@ struct Transform
 	Vector3 translate;
 };
 
+struct Sphere {
+	Vector3 center;
+	float radius;
+	Vector3 rotate;
+};
+
 // DXGIファクトリー (実体はmain.cpp)
 extern IDXGIFactory7* dxgiFactory;
