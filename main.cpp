@@ -286,10 +286,16 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	DirectX::ScratchImage mipImages = LoadTexture("Resources/uvChecker.png");
 	const DirectX::TexMetadata& metadata = mipImages.GetMetadata();
-	ID3D12Resource* textureResource = CreateTextureResource(device, metadata);
-	UploadTextureData(textureResource, mipImages);
+	ID3D12Resource* textureResource1 = CreateTextureResource(device, metadata);
+	UploadTextureData(textureResource1, mipImages);
 
-	// 資料通りに生成するResourceの設定を行う
+	// 二枚目のテクスチャ読み込みとリソース生成（元コードの変数名ルールに準拠）
+	DirectX::ScratchImage mipImages2 = LoadTexture("Resources/monsterBall.png");
+	const DirectX::TexMetadata& metadata2 = mipImages2.GetMetadata();
+	ID3D12Resource* textureResource2 = CreateTextureResource(device, metadata2);
+	UploadTextureData(textureResource2, mipImages2);
+
+	// Resourceの設定を行う
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = kClientWidth; // テクスチャの幅（画面サイズ）
 	resourceDesc.Height = kClientHeight; // テクスチャの高さ（画面サイズ）
@@ -328,33 +334,59 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
 	dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-	
+
 	// DepthStencilViewを生成して、DescriptorHeapの先頭に配置
 	device->CreateDepthStencilView(depthStencilResource, &dsvDesc, dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
 	// テクスチャ用SRVの作成
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-	srvDesc.Format = metadata.format;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MipLevels = UINT(metadata.mipLevels);
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc1{};
+	srvDesc1.Format = metadata.format;
+	srvDesc1.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc1.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc1.Texture2D.MipLevels = UINT(metadata.mipLevels);
 
-	// ハンドルの取得（0番目をテクスチャ用にする）
-	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU = srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
-	textureSrvHandleCPU.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	textureSrvHandleGPU.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	device->CreateShaderResourceView(textureResource, &srvDesc, textureSrvHandleCPU);
+	UINT descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	// 1枚目は先頭から1つ進めた位置（1番目）
+	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU1 = srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU1 = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	textureSrvHandleCPU1.ptr += descriptorSize * 1;
+	textureSrvHandleGPU1.ptr += descriptorSize * 1;
+	device->CreateShaderResourceView(textureResource1, &srvDesc1, textureSrvHandleCPU1);
+
+	// --- 2枚目のテクスチャ用SRVの作成 ---
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc2{};
+	srvDesc2.Format = metadata2.format;
+	srvDesc2.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc2.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc2.Texture2D.MipLevels = UINT(metadata2.mipLevels);
+
+	// 2枚目は先頭から2つ進めた位置（2番目）に配置して重複を避ける
+	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU2 = srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	textureSrvHandleCPU2.ptr += descriptorSize * 2;
+	textureSrvHandleGPU2.ptr += descriptorSize * 2;
+	device->CreateShaderResourceView(textureResource2, &srvDesc2, textureSrvHandleCPU2);
 
 
 #ifdef USE_IMGUI
 
-	// ImGui用に1つ後ろのハンドルを計算する
-	UINT descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	D3D12_CPU_DESCRIPTOR_HANDLE imguiSrvHandleCPU = textureSrvHandleCPU;
-	imguiSrvHandleCPU.ptr += descriptorSize;
-	D3D12_GPU_DESCRIPTOR_HANDLE imguiSrvHandleGPU = textureSrvHandleGPU;
-	imguiSrvHandleGPU.ptr += descriptorSize;
+	// ImGui用はさらにその後ろ（3番目）を使用するように修正
+	D3D12_CPU_DESCRIPTOR_HANDLE imguiSrvHandleCPU = srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	imguiSrvHandleCPU.ptr += descriptorSize * 3;
+	D3D12_GPU_DESCRIPTOR_HANDLE imguiSrvHandleGPU = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	imguiSrvHandleGPU.ptr += descriptorSize * 3;
+
+	// ※元コードで imguiSrvHandleCPU1, 2 と分かれていましたが、
+	// ImGui自体に渡すハンドルは1つで良いため、変数名が競合する場合は上記のように整理するか、
+	// 以下のように元コードの変数名に合わせるなら 3番目、4番目 と進めてください。
+	D3D12_CPU_DESCRIPTOR_HANDLE imguiSrvHandleCPU1 = imguiSrvHandleCPU;
+	D3D12_GPU_DESCRIPTOR_HANDLE imguiSrvHandleGPU1 = imguiSrvHandleGPU;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE imguiSrvHandleCPU2 = imguiSrvHandleCPU;
+	imguiSrvHandleCPU2.ptr += descriptorSize;
+	D3D12_GPU_DESCRIPTOR_HANDLE imguiSrvHandleGPU2 = imguiSrvHandleGPU;
+	imguiSrvHandleGPU2.ptr += descriptorSize;
 
 #endif
 
@@ -506,7 +538,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	vertexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataSprite));
 
 	vertexDataSprite[0].position = { 0.0f, 360.0f, 0.0f, 1.0f };
-	vertexDataSprite[0].u = 0.0f; 
+	vertexDataSprite[0].u = 0.0f;
 	vertexDataSprite[0].v = 1.0f;
 	vertexDataSprite[1].position = { 0.0f, 0.0f, 0.0f, 1.0f };
 	vertexDataSprite[1].u = 0.0f;
@@ -526,13 +558,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	vertexDataSprite[5].v = 1.0f;
 
 	ID3D12Resource* transformationMatrixResourceSprite = CreateBufferResource(device, sizeof(Matrix4x4));
-	
+
 	Matrix4x4* transformationMatrixDataSprite = nullptr;
 
 	transformationMatrixResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixDataSprite));
 
 	*transformationMatrixDataSprite = MakeIdentity4x4();
-	
+
 	struct Transform transformSprite { { 1.0f, 1.0f, 1.0f }, { 0.0f,0.0f,0.0f }, { 0.0f,0.0f,0.0f } };
 
 	Matrix4x4 worldMatrixSprite = MakeAffineMatrix(transformSprite.scale, transformSprite.rotate, transformSprite.translate);
@@ -636,6 +668,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
+	// ★追加：テクスチャ切り替えフラグ
+	bool useMonsterBall = true;
 
 	while (msg.message != WM_QUIT)
 	{
@@ -666,6 +700,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			*transformationMatrixDataSphere3D = worldViewProjectionMatrixSphere;
 
 			ImGui::ShowDemoWindow();
+
+			// ★追加：ImGuiにテクスチャ切り替え用チェックボックスを追加
+			ImGui::Checkbox("use MonsterBall Texture", &useMonsterBall);
+
 			ImGui::Render();
 
 			UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
@@ -687,7 +725,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			// 指定した深度で画面全体をクリアする（一番奥の1.0fでクリア）
 			commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-			
+
 			D3D12_VIEWPORT viewport{};
 			viewport.Width = kClientWidth;
 			viewport.Height = kClientHeight;
@@ -713,10 +751,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			commandList->SetPipelineState(graphicsPipelineState);
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+			// ★切り替え用のカレントハンドルを特定
+			D3D12_GPU_DESCRIPTOR_HANDLE currentTextureHandle = useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU1;
+
 			// --- 1. 3Dオブジェクト（三角形）の描画 ---
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
-			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+			commandList->SetGraphicsRootDescriptorTable(2, currentTextureHandle); // ★カレントハンドルへ変更
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 			commandList->DrawInstanced(6, 1, 0, 0);
 
@@ -724,7 +765,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			// 修正点：ババイドン不足エラーを防ぐためマテリアルとテクスチャも再設定
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSphere3D->GetGPUVirtualAddress());
-			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+			commandList->SetGraphicsRootDescriptorTable(2, currentTextureHandle); // ★カレントハンドルへ変更
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSphere3D);
 			commandList->DrawInstanced(kNumSphereVertices, 1, 0, 0);
 
@@ -732,7 +773,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			// 修正点：スプライト描画時にもルートパラメータを正しくセット
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
-			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
+			commandList->SetGraphicsRootDescriptorTable(2, currentTextureHandle); // ★カレントハンドルへ変更
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
 			commandList->DrawInstanced(6, 1, 0, 0);
 
@@ -801,8 +842,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	useAdapter->Release();
 	dxgiFactory->Release();
 
-	if (textureResource) {
-		textureResource->Release();
+	if (textureResource1) {
+		textureResource1->Release();
+	}
+	// ★追加：二枚目のテクスチャ解放処理
+	if (textureResource2) {
+		textureResource2->Release();
 	}
 
 #ifdef _DEBUG
@@ -822,7 +867,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 #endif // USE_IMGUI
 
 	vertexResource->Release();
-	vertexResourceSprite->Release(); 
+	vertexResourceSprite->Release();
 	transformationMatrixResourceSprite->Release();
 	// 追加：球体用リソースの解放
 	vertexResourceSphere3D->Release();
