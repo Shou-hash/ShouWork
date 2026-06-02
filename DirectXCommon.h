@@ -30,9 +30,11 @@ ID3D12Resource* CreateBufferResource(ID3D12Device* device, size_t sizeInBytes);
 DirectX::ScratchImage LoadTexture(const std::string& filePath);
 
 // テクスチャリソースの作成
-ID3D12Resource* CreateTextureresource(ID3D12Device* device, const DirectX::TexMetadata& metadata);
+ID3D12Resource* CreateTextureResource(ID3D12Device* device, const DirectX::TexMetadata& metadata);
 
 // テクスチャデータのアップロード
 void UploadTextureData(ID3D12Resource* texture, const DirectX::ScratchImage& mipImages);
+
+ID3D12Resource* CreateDepthStenciTextureResource(ID3D12Device* device, int32_t width, int32_t height);
 
 #pragma endregion
