@@ -72,6 +72,7 @@ Matrix4x4 Multiply(const Matrix4x4& a, const Matrix4x4& b) {
 	return r;
 }
 
+// ベクトルを4x4行列で変換する関数
 Vector3 Transform(const Vector3& vector, const Matrix4x4& matrix)
 {
 	Vector3 result;

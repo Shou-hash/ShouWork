@@ -272,6 +272,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
 	*materialData = Vector4(1.0f, 1.0f, 1.0f, 1.0f); // テクスチャの色をそのまま出すために白(1,1,1,1)を推奨
 
+	// Sprite用の頂点バッファも同様に作成（サイズは6枚分）
+	ID3D12Resource* vertexResourceSprite = CreateBufferResource(device, sizeof(VertexData) * 6);
+
+	// 頂点データの設定（例として、正方形を描くための6枚分の頂点データ）
+	D3D12_VERTEX_BUFFER_VIEW vertexBufferViewSprite{};
+	vertexBufferViewSprite.BufferLocation = vertexResourceSprite->GetGPUVirtualAddress(); // ★Sprite用に修正
+	vertexBufferViewSprite.SizeInBytes = sizeof(VertexData) * 6;
+	vertexBufferViewSprite.StrideInBytes = sizeof(VertexData);
+
 #pragma endregion
 
 	DirectX::ScratchImage mipImages = LoadTexture("Resources/uvChecker.png");
@@ -489,6 +498,49 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
+	VertexData* vertexDataSprite = nullptr;
+	vertexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataSprite));
+
+	vertexDataSprite[0].position = { 0.0f, 360.0f, 0.0f, 1.0f };
+	vertexDataSprite[0].u = 0.0f; 
+	vertexDataSprite[0].v = 1.0f;
+	vertexDataSprite[1].position = { 0.0f, 0.0f, 0.0f, 1.0f };
+	vertexDataSprite[1].u = 0.0f;
+	vertexDataSprite[1].v = 0.0f;
+	vertexDataSprite[2].position = { 640.0f, 360.0f, 0.0f, 1.0f };
+	vertexDataSprite[2].u = 1.0f;
+	vertexDataSprite[2].v = 1.0f;
+
+	vertexDataSprite[3].position = { 0.0f, 0.0f, 0.0f, 1.0f };
+	vertexDataSprite[3].u = 0.0f;
+	vertexDataSprite[3].v = 0.0f;
+	vertexDataSprite[4].position = { 640.0f, 0.0f, 0.0f, 1.0f };
+	vertexDataSprite[4].u = 1.0f;
+	vertexDataSprite[4].v = 0.0f;
+	vertexDataSprite[5].position = { 640.0f, 360.0f, 0.0f, 1.0f };
+	vertexDataSprite[5].u = 1.0f;
+	vertexDataSprite[5].v = 1.0f;
+
+	ID3D12Resource* transformationMatrixResourceSprite = CreateBufferResource(device, sizeof(Matrix4x4));
+	
+	Matrix4x4* transformationMatrixDataSprite = nullptr;
+
+	transformationMatrixResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixDataSprite));
+
+	*transformationMatrixDataSprite = MakeIdentity4x4();
+	
+	struct Transform transformSprite { { 1.0f, 1.0f, 1.0f }, { 0.0f,0.0f,0.0f }, { 0.0f,0.0f,0.0f } };
+
+	Matrix4x4 worldMatrixSprite = MakeAffineMatrix(transformSprite.scale, transformSprite.rotate, transformSprite.translate);
+
+	Matrix4x4 vireMatrixSprite = MakeIdentity4x4();
+
+	Matrix4x4 projectionMatrixSprite = MakeOrthographicMatrix(0.0f, float(kClientWidth), 0.0f, float(kClientHeight), 0.0f, 100.0f);
+
+	Matrix4x4 worldViewProjectionMatrixSprite = Multiply(worldMatrixSprite, Multiply(vireMatrixSprite, projectionMatrixSprite));
+
+	*transformationMatrixDataSprite = worldViewProjectionMatrixSprite;
+
 	// 左下 (UV: 0.0, 1.0)
 	vertexData[0].position = { -0.5f, -0.5f, 0.0f, 1.0f };
 	vertexData[0].u = 0.0f; vertexData[0].v = 1.0f;
@@ -577,18 +629,33 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			// テクスチャ(SRV)をバインドする前に、必ずDescriptorHeapをセットする！
 			ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap };
 			commandList->SetDescriptorHeaps(1, descriptorHeaps);
-
-			// 各種ルートパラメータの設定
-			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
-			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
-
-			//DescriptorTableの設定
-			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
-
 			commandList->SetPipelineState(graphicsPipelineState);
-			commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+			// 1. 3Dオブジェクト（三角形）の描画設定と実行
+			// 各種ルートパラメータの設定（3D用）
+			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress()); // マテリアル(t0)
+			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());       // 3D用のWVP行列
+			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);                         // テクスチャ
+
+			// 3D用の頂点バッファをセットして描画
+			commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+			commandList->DrawInstanced(6, 1, 0, 0); // 三角形の描画
+
+			// スプライト（2D）の描画設定と実行（資料1枚目の通りに実装）
+			// マテリアル(0番)とテクスチャ(2番)は上の3Dと同じものを流用するため、設定をスキップ！
+
+			// 変更が必要なものだけを上書きして描画する
+			// ① VBVをスプライト用に変更
+			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
+
+			// ② 行列（1番）をスプライト用の行列リソースに差し替える
+			commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+
+			// 描画実行
 			commandList->DrawInstanced(6, 1, 0, 0);
+
+			// =================================================================
 
 			// ImGuiの描画（一番最前面に映すため最後に行う）
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
@@ -664,6 +731,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 #endif // USE_IMGUI
 
 	vertexResource->Release();
+	vertexResourceSprite->Release(); 
+	transformationMatrixResourceSprite->Release();
 	graphicsPipelineState->Release();
 	signatureBlob->Release();
 	if (errorBlob)
