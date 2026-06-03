@@ -348,6 +348,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
 	*materialData = Vector4(1.0f, 1.0f, 1.0f, 1.0f); // デフォルト値を白に変更してテクスチャ本来の色を維持
 
+	// ★ 2つ目の三角形用のマテリアル（色指定）リソースを追加定義
+	ID3D12Resource* materialResource2 = CreateBufferResource(device, sizeof(Vector4));
+	Vector4* materialData2 = nullptr;
+	materialResource2->Map(0, nullptr, reinterpret_cast<void**>(&materialData2));
+	*materialData2 = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+
 #pragma endregion
 
 	DirectX::ScratchImage mipImages = LoadTexture("Resources/uvChecker.png");
@@ -613,7 +619,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	// ★ 切り替え管理変数
 	bool useMonsterBall = false;
-	int selectedTextureIndex = 0;
+	int selectedTextureIndex = 0;  // Object 1用のテクスチャインデックス
+	int selectedTextureIndex2 = 1; // ★ 追加：Object 2用のテクスチャインデックス（初期値はuvChecker）
 	float scene2Color[4] = { 0.05f, 0.05f, 0.1f, 1.0f }; // サイバー感のある少し暗い紺色を初期値に
 	float globalTime = 0.0f;                             // ★ アニメーション計算用のグローバルタイマー
 
@@ -653,9 +660,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			if (currentScene == 1 && previousScene == 0) {
 				// Scene 2 に変わったら、テクスチャを強制的に white1x1.png (インデックス 2) に設定
 				selectedTextureIndex = 2;
+				selectedTextureIndex2 = 2; // ★ Object 2用もScene 2ではリセット
 				// 色を純粋な青色 (R=0.0, G=0.0, B=1.0, A=1.0) に上書き
 				if (materialData != nullptr) {
 					*materialData = Vector4(0.0f, 0.0f, 1.0f, 1.0f);
+				}
+				if (materialData2 != nullptr) {
+					*materialData2 = Vector4(0.0f, 0.0f, 1.0f, 1.0f);
 				}
 			}
 			previousScene = currentScene; // 現在の状態を保存
@@ -675,20 +686,66 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 				ImGui::Separator();
 
-				if (ImGui::TreeNodeEx("Object", ImGuiTreeNodeFlags_DefaultOpen))
+				// ★ 「Object 1」と「Object 2」を両方IMGUIで操作・色変えできるように変更
+				if (ImGui::TreeNodeEx("Objects", ImGuiTreeNodeFlags_DefaultOpen))
 				{
-					ImGui::SetNextItemWidth(200.0f);
-					ImGui::DragFloat3("Translate", &transform.translate.x, 0.01f, -3.0f, 3.0f, "%.3f");
+					if (ImGui::TreeNodeEx("Object 1", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						ImGui::SetNextItemWidth(200.0f);
+						ImGui::DragFloat3("Translate", &transform.translate.x, 0.01f, -3.0f, 3.0f, "%.3f");
 
-					ImGui::SetNextItemWidth(200.0f);
-					ImGui::DragFloat3("Rotate", &transform.rotate.x, 0.01f, -3.14f, 3.14f, "%.3f");
+						ImGui::SetNextItemWidth(200.0f);
+						ImGui::DragFloat3("Rotate", &transform.rotate.x, 0.01f, -3.14f, 3.14f, "%.3f");
 
-					ImGui::SetNextItemWidth(200.0f);
-					ImGui::DragFloat3("Scale", &transform.scale.x, 0.01f, 0.1f, 3.0f, "%.3f");
+						ImGui::SetNextItemWidth(200.0f);
+						ImGui::DragFloat3("Scale", &transform.scale.x, 0.01f, 0.1f, 3.0f, "%.3f");
+
+						ImGui::SetNextItemWidth(200.0f);
+						ImGui::ColorEdit4("color", reinterpret_cast<float*>(materialData), ImGuiColorEditFlags_Float);
+
+						// ★ Object 1 個別のテクスチャ選択
+						ImGui::SetNextItemWidth(200.0f);
+						if (ImGui::TreeNode("Texture Select"))
+						{
+							if (ImGui::Selectable("resources/monsterBall.png", selectedTextureIndex == 0)) { selectedTextureIndex = 0; }
+							if (ImGui::Selectable("resources/uvChecker.png", selectedTextureIndex == 1)) { selectedTextureIndex = 1; }
+							if (ImGui::Selectable("white1x1.png", selectedTextureIndex == 2)) { selectedTextureIndex = 2; }
+							ImGui::TreePop();
+						}
+
+						ImGui::TreePop();
+					}
+
+					if (ImGui::TreeNodeEx("Object 2", ImGuiTreeNodeFlags_DefaultOpen))
+					{
+						ImGui::SetNextItemWidth(200.0f);
+						ImGui::DragFloat3("Translate", &transform2.translate.x, 0.01f, -3.0f, 3.0f, "%.3f");
+
+						ImGui::SetNextItemWidth(200.0f);
+						ImGui::DragFloat3("Rotate", &transform2.rotate.x, 0.01f, -3.14f, 3.14f, "%.3f");
+
+						ImGui::SetNextItemWidth(200.0f);
+						ImGui::DragFloat3("Scale", &transform2.scale.x, 0.01f, 0.1f, 3.0f, "%.3f");
+
+						ImGui::SetNextItemWidth(200.0f);
+						ImGui::ColorEdit4("color", reinterpret_cast<float*>(materialData2), ImGuiColorEditFlags_Float);
+
+						// ★ 追加：Object 2 個別のテクスチャ選択UI
+						ImGui::SetNextItemWidth(200.0f);
+						if (ImGui::TreeNode("Texture Select##Obj2"))
+						{
+							if (ImGui::Selectable("resources/monsterBall.png##Obj2", selectedTextureIndex2 == 0)) { selectedTextureIndex2 = 0; }
+							if (ImGui::Selectable("resources/uvChecker.png##Obj2", selectedTextureIndex2 == 1)) { selectedTextureIndex2 = 1; }
+							if (ImGui::Selectable("white1x1.png##Obj2", selectedTextureIndex2 == 2)) { selectedTextureIndex2 = 2; }
+							ImGui::TreePop();
+						}
+
+						ImGui::TreePop();
+					}
 
 					ImGui::Button("Delete");
 
-					if (ImGui::TreeNodeEx("Material", ImGuiTreeNodeFlags_DefaultOpen))
+					if (ImGui::TreeNodeEx("Material (Common)", ImGuiTreeNodeFlags_DefaultOpen))
 					{
 						static float uvTranslate[2] = { 0.0f, 0.0f };
 						static float uvRotate = 0.0f;
@@ -706,19 +763,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 						ImGui::DragFloat2("UVScale", uvScale, 0.01f, 0.1f, 10.0f, "%.3f");
 
 						ImGui::SetNextItemWidth(200.0f);
-						ImGui::ColorEdit4("color", reinterpret_cast<float*>(materialData), ImGuiColorEditFlags_Float);
-
-						ImGui::SetNextItemWidth(200.0f);
 						ImGui::Combo("Lighting", &lightingType, lightings, _countof(lightings));
 
-						ImGui::SetNextItemWidth(200.0f);
-						if (ImGui::TreeNode("Texture Select"))
-						{
-							if (ImGui::Selectable("resources/monsterBall.png", selectedTextureIndex == 0)) { selectedTextureIndex = 0; }
-							if (ImGui::Selectable("resources/uvChecker.png", selectedTextureIndex == 1)) { selectedTextureIndex = 1; }
-							if (ImGui::Selectable("white1x1.png", selectedTextureIndex == 2)) { selectedTextureIndex = 2; }
-							ImGui::TreePop();
-						}
 						ImGui::TreePop();
 					}
 					ImGui::TreePop();
@@ -811,6 +857,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 					Matrix4x4 matWorld1 = MakeAffineMatrix(particles[i].transform.scale, particles[i].transform.rotate, finalPos);
 					*particleWVPData1[i] = Multiply(matWorld1, Multiply(viewMatrix, projectionMatrix));
 
+					// 修正箇所：2つ目の板ポリゴンの回転行列には、元コード通り particles[i].transform2.rotate を使用するよう修正
 					Matrix4x4 matWorld2 = MakeAffineMatrix(particles[i].transform.scale, particles[i].transform2.rotate, finalPos);
 					*particleWVPData2[i] = Multiply(matWorld2, Multiply(viewMatrix, projectionMatrix));
 				}
@@ -869,22 +916,30 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-			// 選択されたテクスチャのGPUハンドルを取得
+			// Object 1用の選択されたテクスチャのGPUハンドルを取得
 			D3D12_GPU_DESCRIPTOR_HANDLE currentTextureHandle = textureSrvHandleGPU1;
 			if (selectedTextureIndex == 0) { currentTextureHandle = textureSrvHandleGPU2; } // monsterBall
 			else if (selectedTextureIndex == 1) { currentTextureHandle = textureSrvHandleGPU1; } // uvChecker
 			else if (selectedTextureIndex == 2) { currentTextureHandle = textureSrvHandleGPU3; } // white1x1
 
+			// ★ 追加：Object 2用の選択されたテクスチャのGPUハンドルを取得
+			D3D12_GPU_DESCRIPTOR_HANDLE currentTextureHandle2 = textureSrvHandleGPU1;
+			if (selectedTextureIndex2 == 0) { currentTextureHandle2 = textureSrvHandleGPU2; } // monsterBall
+			else if (selectedTextureIndex2 == 1) { currentTextureHandle2 = textureSrvHandleGPU1; } // uvChecker
+			else if (selectedTextureIndex2 == 2) { currentTextureHandle2 = textureSrvHandleGPU3; } // white1x1
+
 			if (currentScene == 0) {
+				// 1つ目の三角形の描画（ImGuiでの選択によってテクスチャが切り替わる）
 				commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 				commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
 				commandList->SetGraphicsRootDescriptorTable(2, currentTextureHandle);
 				commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 				commandList->DrawInstanced(3, 1, 0, 0);
 
-				commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+				// ★ 2つ目の三角形の描画（固定ではなく、個別に選択された currentTextureHandle2 をバインド）
+				commandList->SetGraphicsRootConstantBufferView(0, materialResource2->GetGPUVirtualAddress());
 				commandList->SetGraphicsRootConstantBufferView(1, wvpResource2->GetGPUVirtualAddress());
-				commandList->SetGraphicsRootDescriptorTable(2, currentTextureHandle);
+				commandList->SetGraphicsRootDescriptorTable(2, currentTextureHandle2); // 変更：動的に選択されたハンドルを適用
 				commandList->IASetVertexBuffers(0, 1, &vertexBufferView2);
 				commandList->DrawInstanced(3, 1, 0, 0);
 			}
@@ -999,6 +1054,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	pixelShaderBlob->Release();
 	vertexShaderBlob->Release();
 	materialResource->Release();
+	materialResource2->Release(); // ★ 追加したマテリアル2の解放
 
 	CoUninitialize();
 	return 0;
