@@ -181,6 +181,12 @@ Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspect, float nearClip, flo
 // 正射影行列の作成
 Matrix4x4 MakeOrthographicMatrix(float left, float right, float top, float bottom, float nearClip, float farClip) {
 	Matrix4x4 result = {};
+
+	// ゼロ除算防止のためのチェック
+	if (right == left || top == bottom || farClip == nearClip) {
+		return MakeIdentity4x4();
+	}
+
 	result.m[0][0] = 2.0f / (right - left);
 	result.m[1][1] = 2.0f / (top - bottom);
 	result.m[2][2] = 1.0f / (farClip - nearClip);
@@ -188,6 +194,7 @@ Matrix4x4 MakeOrthographicMatrix(float left, float right, float top, float botto
 	result.m[3][1] = -(top + bottom) / (top - bottom);
 	result.m[3][2] = -nearClip / (farClip - nearClip);
 	result.m[3][3] = 1.0f;
+
 	return result;
 }
 

@@ -573,7 +573,12 @@
 
 		Matrix4x4 vireMatrixSprite = MakeIdentity4x4();
 
-		Matrix4x4 projectionMatrixSprite = MakeOrthographicMatrix(0.0f, float(kClientWidth), 0.0f, float(kClientHeight), 0.0f, 100.0f);
+		static float orthoLeft = 0.0f;
+		static float orthoRight = 1280.0f;
+		static float orthoTop = 0.0f;
+		static float orthoBottom = 720.0f;
+
+		Matrix4x4 projectionMatrixSprite = MakeOrthographicMatrix(orthoLeft, orthoRight, orthoTop, orthoBottom, 0.0f, 100.0f);
 
 		Matrix4x4 worldViewProjectionMatrixSprite = Multiply(worldMatrixSprite, Multiply(vireMatrixSprite, projectionMatrixSprite));
 
@@ -702,6 +707,16 @@
 				Matrix4x4 worldMatrixSphere = MakeAffineMatrix({ sphere.radius, sphere.radius, sphere.radius }, sphere.rotate, sphere.center);
 				Matrix4x4 worldViewProjectionMatrixSphere = Multiply(worldMatrixSphere, Multiply(viewMatrix, projectionMatrix));
 				*transformationMatrixDataSphere3D = worldViewProjectionMatrixSphere;
+
+				ImGui::Begin("Ortho Matrix Config");
+				ImGui::SliderFloat("Left", &orthoLeft, -200.0f, 200.0f);
+				ImGui::SliderFloat("Right", &orthoRight, 1000.0f, 2000.0f);
+				ImGui::SliderFloat("Top", &orthoTop, -200.0f, 200.0f);
+				ImGui::SliderFloat("Bottom", &orthoBottom, 500.0f, 1000.0f);
+				ImGui::End();
+
+				// 毎フレーム更新して行列に適用
+				projectionMatrixSprite = MakeOrthographicMatrix(orthoLeft, orthoRight, orthoTop, orthoBottom, 0.0f, 100.0f);
 
 				ImGui::ShowDemoWindow();
 
