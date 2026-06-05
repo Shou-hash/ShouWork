@@ -14,15 +14,15 @@ struct VertexData {
 	float u, v;
 };
 
-// --- Scene 2 演出用の大量の三角形データ構造体 ---
+// Scene 2 演出用の大量の三角形データ構造体
 struct ParticleTriangle {
 	struct Transform transform;
 	struct Transform transform2; // 2枚交差用
 	float speed;
 	float rotSpeed;
 	Vector3 direction;          // 3D的な移動方向用
-	float baseScale;            // ★ かっこいい演出用：初期スケールの記憶
-	float timeOffset;           // ★ かっこいい演出用：個別の時間軸のズレ
+	float baseScale;            // ★ 演出用：初期スケールの記憶
+	float timeOffset;           // ★ 演出用：個別の時間軸のズレ
 };
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
@@ -149,7 +149,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	wvpResource2->Map(0, nullptr, reinterpret_cast<void**>(&wvpData2));
 	*wvpData2 = MakeIdentity4x4();
 
-	// --- Scene 2 用の大量の定数バッファ ---
+	// Scene 2 用の大量の定数バッファ
 	const int kMaxParticles = 300;
 	std::vector<ID3D12Resource*> particleWVPResources1(kMaxParticles);
 	std::vector<ID3D12Resource*> particleWVPResources2(kMaxParticles);
@@ -174,7 +174,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		*particleMaterialData[i] = Vector4(0.0f, 0.0f, 1.0f, 1.0f);
 	}
 
-	// --- 演出用パーティクルデータの初期化 ---
+	// 演出用パーティクルデータの初期化
 	std::vector<ParticleTriangle> particles(kMaxParticles);
 	std::random_device seed_gen;
 	std::mt19937 engine(seed_gen());
@@ -342,7 +342,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * 3);
 	ID3D12Resource* vertexResource2 = CreateBufferResource(device, sizeof(VertexData) * 3);
 
-	// --- マテリアル（色指定）リソースの初期化 ---
+	// マテリアル（色指定）リソースの初期化
 	ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Vector4));
 	Vector4* materialData = nullptr;
 	materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
@@ -533,12 +533,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	inputLayoutDesc.pInputElementDescs = inputElementDescs;
 	inputLayoutDesc.NumElements = _countof(inputElementDescs);
 
-	// ★ かっこいい演出（フェード処理）用：通常描画用の不透明ブレンドステート
+	// ★ 演出（フェード処理）用：通常描画用の不透明ブレンドステート
 	D3D12_BLEND_DESC blendDescOpaque{};
 	blendDescOpaque.RenderTarget[0].BlendEnable = FALSE;
 	blendDescOpaque.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
-	// ★ かっこいい演出用：きれいに重なり合うための半透明アルファブレンドステート
+	// ★ 演出用：きれいに重なり合うための半透明アルファブレンドステート
 	D3D12_BLEND_DESC blendDescAlpha{};
 	blendDescAlpha.RenderTarget[0].BlendEnable = TRUE;
 	blendDescAlpha.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -640,7 +640,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			ImGui_ImplWin32_NewFrame();
 			ImGui::NewFrame();
 
-			// --- シーンコントローラー ---
+			// シーンコントローラー
 			ImGui::Begin("Scene Controller");
 			if (ImGui::BeginTabBar("SceneTabs")) {
 				if (ImGui::BeginTabItem("Scene 1 (Interactive)")) {
@@ -675,7 +675,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			if (currentScene == 0) {
 #ifdef USE_IMGUI
-				// --- Scene 1: 設定ウィンドウ ---
+				// Scene 1: 設定ウィンドウ
 				ImGui::Begin("Settings");
 
 				static int currentModelIndex = 0;
@@ -782,7 +782,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			}
 			else {
 #ifdef USE_IMGUI
-				// --- Scene 2: 演出微調整ウィンドウ ---
+				// Scene 2: 演出微調整ウィンドウ
 				ImGui::Begin("Scene 2 Performance Control");
 				ImGui::Text("Dynamic Warp Tunnel Effect");
 
