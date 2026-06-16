@@ -720,6 +720,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	// ★追加：スプライト用のテクスチャ切り替えフラグを定義
 	bool useSpriteMonsterBall = false;
 
+	// ★追加：ImGuiでUI操作するためのローカルのライト方向変数（初期値は下向き）
+	float uiLightDirection[3] = { 0.0f, -1.0f, 0.0f };
+
 	while (msg.message != WM_QUIT)
 	{
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
@@ -773,19 +776,28 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			ImGui::Checkbox("Enable Lighting", reinterpret_cast<bool*>(&materialData->enableLighting));
 			ImGui::Separator();
 			ImGui::ColorEdit4("Light Color", &directionalLightData->color.x);
-			ImGui::SliderFloat3("Light Direction", &directionalLightData->direction.x, -1.0f, 1.0f);
+
+			// ★資料の指定通り、UI操作用に用意したテンポラリ配列（uiLightDirection）をSliderFloat3に渡す
+			ImGui::SliderFloat3("Light Direction", uiLightDirection, -1.0f, 1.0f);
 			ImGui::SliderFloat("Light Intensity", &directionalLightData->intensity, 0.0f, 5.0f);
 
-			// 方向ベクトルの正規化
-			float length = std::sqrt(directionalLightData->direction.x * directionalLightData->direction.x +
-				directionalLightData->direction.y * directionalLightData->direction.y +
-				directionalLightData->direction.z * directionalLightData->direction.z);
+			// ★資料の擬似コードを忠実に再現：方向ベクトルの正規化（Normalize）処理
+			float length = std::sqrt(uiLightDirection[0] * uiLightDirection[0] +
+				uiLightDirection[1] * uiLightDirection[1] +
+				uiLightDirection[2] * uiLightDirection[2]);
 			if (length > 0.0f)
 			{
-				directionalLightData->direction.x /= length;
-				directionalLightData->direction.y /= length;
-				directionalLightData->direction.z /= length;
+				// 長さが0より大きい場合、各要素を長さで割って正規化し、定数バッファへ代入する
+				directionalLightData->direction.x = uiLightDirection[0] / length;
+				directionalLightData->direction.y = uiLightDirection[1] / length;
+				directionalLightData->direction.z = uiLightDirection[2] / length;
 			}
+			else
+			{
+				// 万が一長さが0（未入力や不正値）だった場合のフォールバック（デフォルトの下向き）
+				directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
+			}
+
 			ImGui::End();
 
 			ImGui::Render();
@@ -857,7 +869,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			commandList->DrawInstanced(kNumSphereVertices, 1, 0, 0);
 
 			// --- 3. 2Dオブジェクト（スプライト）の描画 ---
-			// 指摘対応：固定ハンドルから選択ハンドルへ変更
+			// 指浅対応：固定ハンドルから選択ハンドルへ変更
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress()); // 追加：平行光源を1番にバインド
 			commandList->SetGraphicsRootConstantBufferView(2, transformationMatrixResourceSprite->GetGPUVirtualAddress()); // 元の1番から2番へシフト
@@ -899,7 +911,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		}
 	}
 
-	// (以下、解放処理などは変更ありませんので省略、そのままビルド可能です)
+	// (以下、解放処理などは変更ありませんのでそのままビルド可能です)
 	IDXGIDebug* debug;
 	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&debug))))
 	{
