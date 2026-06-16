@@ -43,5 +43,24 @@ struct Sphere {
 	Vector3 rotate;
 };
 
+struct Material
+{
+	Vector4 color;
+	int32_t enableLighting;
+};
+
+struct TransformationMatrix
+{
+	Matrix4x4 WVP;
+	Matrix4x4 World;
+};
+
+struct DirectionalLight
+{
+	Vector4 color;
+	Vector3 direction;
+	float intensity;
+};
+
 // DXGIファクトリー (実体はmain.cpp)
 extern IDXGIFactory7* dxgiFactory;
