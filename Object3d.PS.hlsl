@@ -33,22 +33,25 @@ PixelShaderOutput main(VertexShaderOutput input)
     // ライティングの有効・無効による分岐
     if (gMaterial.enableLighting != 0)
     {
-        // ハーフベクトルではなく、資料の平行光源計算（ランバート反射）
         // 光の向きを逆転させ、法線との内積をとる
         float32_t NdotL = dot(normalize(input.normal), -normalize(gDirectionalLight.direction));
-        float32_t cos = saturate(NdotL); // 0.0〜1.0にクランプ
         
-        // 輝度（cos * intensity）を計算し、色を乗算
-        float32_t3 lightColor = gDirectionalLight.color.rgb * gDirectionalLight.intensity * cos;
+        float32_t halfLambert = pow(NdotL * 0.5f + 0.5f, 2.0f);
         
-        // 最終的な色の決定
-        output.color.rgb = gMaterial.color.rgb * textureColor.rgb * lightColor;
-        output.color.a = gMaterial.color.a * textureColor.a;
+        // 輝度と色を補正して最終カラーを計算
+        float32_t4 diffuse = gMaterial.color * textureColor * gDirectionalLight.color * halfLambert * gDirectionalLight.intensity;
+        output.color = diffuse;
     }
     else
     {
-        // ライティング無効時は従来通りの計算
+        // ライティングが無効な場合は、素材の色とテクスチャの色を掛け合わせるのみ
         output.color = gMaterial.color * textureColor;
+    }
+    
+    // アルファ値が0の場合は描画をスキップするなどの処理が必要であれば適宜
+    if (output.color.a == 0.0f)
+    {
+        discard;
     }
     
     return output;
