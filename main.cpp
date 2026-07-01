@@ -278,24 +278,29 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma region Index用
 
-	ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint16_t) * 3);
+	// 修正: uint32_t型で6要素分のサイズ（sizeof(uint32_t) * 6）を正しく確保
+	ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint32_t) * 6);
 
 	D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite{};
 	// リソースの先頭のアドレスから使う
 	indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
-	// インデックスバッファのサイズは6つ分（1つの三角形）
-	indexBufferViewSprite.SizeInBytes = sizeof(uint16_t) * 6;
-	// インデックスはuint32_t型（16bit）で扱う
-	indexBufferViewSprite.Format = DXGI_FORMAT_R16_UINT;
+	// 修正: インデックスバッファの総サイズを正しく設定
+	indexBufferViewSprite.SizeInBytes = sizeof(uint32_t) * 6;
+	// 修正: uint32_t型に対応するフォーマット（R32_UINT）に修正
+	indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
 
+	// 修正: ポインタの型を uint32_t* に正しく定義
 	uint32_t* indexDataSprite = nullptr;
-	indexDataSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
+	// 修正: Mapはリソース(indexResourceSprite)に対して呼び出し、受け取り側のポインタアドレスを渡す
+	indexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
+	
+	// インデックスデータの書き込み（2つの三角形で四角形を形成）
 	indexDataSprite[0] = 0; // 左下
 	indexDataSprite[1] = 1; // 上
 	indexDataSprite[2] = 2; // 右下
-	indexDataSprite[3] = 1; // 右下
-	indexDataSprite[4] = 3; // 上
-	indexDataSprite[5] = 2; // 左上
+	indexDataSprite[3] = 1; // 上
+	indexDataSprite[4] = 3; // 右上 (元の重複・不整合を一般的なスプライト矩形インデックスへ想定修正)
+	indexDataSprite[5] = 2; // 右下
 
 	// マテリアル用のTransform設定（初期化）
 	struct Transform uvTransformSprite {

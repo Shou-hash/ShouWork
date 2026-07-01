@@ -1,12 +1,5 @@
 #include "Object3d.hlsli"
 
-struct Material
-{
-    float32_t4 color;
-    int32_t enableLighting;
-    float32_t3 padding;
-    float32_t4x4 uvTransform;
-};
 ConstantBuffer<Material> gMaterial : register(b0);
 
 // 追加：平行光源の構造体と定数バッファ
