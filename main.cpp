@@ -715,6 +715,29 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
+#pragma region Index用
+
+	ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint16_t) * 3);
+
+	D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite{};
+	// リソースの先頭のアドレスから使う
+	indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
+	// インデックスバッファのサイズは6つ分（1つの三角形）
+	indexBufferViewSprite.SizeInBytes = sizeof(uint16_t) * 6;
+	// インデックスはuint32_t型（16bit）で扱う
+	indexBufferViewSprite.Format = DXGI_FORMAT_R16_UINT;
+
+	uint32_t* indexDataSprite = nullptr;
+	indexDataSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
+	indexDataSprite[0] = 0; // 左下
+	indexDataSprite[1] = 1; // 上
+	indexDataSprite[2] = 2; // 右下
+	indexDataSprite[3] = 1; // 右下
+	indexDataSprite[4] = 3; // 上
+	indexDataSprite[5] = 2; // 左上
+
+#pragma endregion
+
 	// ★追加：テクスチャ切り替えフラグ
 	bool useMonsterBall = true;
 	// ★追加：スプライト用のテクスチャ切り替えフラグを定義
@@ -840,6 +863,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			commandList->RSSetScissorRects(1, &scissorRect);
 
 			commandList->SetGraphicsRootSignature(rootSignature);
+
+			// indexBufferViewSpriteを設定する
+			commandList->IASetIndexBuffer(&indexBufferViewSprite);
+
+			commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
 			// テクスチャ(SRV)をバインドする前に、必ずDescriptorHeapをセットする！
 			ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap };
