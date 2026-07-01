@@ -293,7 +293,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	uint32_t* indexDataSprite = nullptr;
 	// 修正: Mapはリソース(indexResourceSprite)に対して呼び出し、受け取り側のポインタアドレスを渡す
 	indexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
-
+	
 	// インデックスデータの書き込み（2つの三角形で四角形を形成）
 	indexDataSprite[0] = 0; // 左下
 	indexDataSprite[1] = 1; // 上
@@ -322,6 +322,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	materialData->uvTransform = MakeIdentity4x4(); // 初期値は単位行列
 
 #pragma endregion
+
+	materialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f); // テクスチャの色をそのまま出すために白(1,1,1,1)を推奨
+	materialData->enableLighting = 1;                     // ライティングをデフォルトで有効化
 
 	// 追加：平行光源用定数バッファの作成と初期化（Common.h の DirectionalLight 構造体を使用）
 	ID3D12Resource* directionalLightResource = CreateBufferResource(device, sizeof(DirectionalLight));
