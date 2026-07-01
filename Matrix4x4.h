@@ -12,6 +12,11 @@ struct Matrix4x4
 	float m[4][4];
 };
 
+struct Matrix3x3
+{
+	float m[3][3];
+};
+
 Matrix4x4 MakeIdentity4x4();
 
 Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translation);
