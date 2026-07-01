@@ -210,3 +210,46 @@ Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, f
 	result.m[3][3] = 1.0f;
 	return result;
 }
+
+Matrix4x4 MakeScaleMatrix(const Vector3& scale) {
+	Matrix4x4 result = identity();
+	result.m[0][0] = scale.x;
+	result.m[1][1] = scale.y;
+	result.m[2][2] = scale.z;
+	return result;
+}
+
+Matrix4x4 MakeRotateXMatrix(float angle) {
+	Matrix4x4 result = identity();
+	result.m[1][1] = cosf(angle);
+	result.m[1][2] = sinf(angle);
+	result.m[2][1] = -sinf(angle);
+	result.m[2][2] = cosf(angle);
+	return result;
+}
+
+Matrix4x4 MakeRotateYMatrix(float angle) {
+	Matrix4x4 result = identity();
+	result.m[0][0] = cosf(angle);
+	result.m[0][2] = -sinf(angle);
+	result.m[2][0] = sinf(angle);
+	result.m[2][2] = cosf(angle);
+	return result;
+}
+
+Matrix4x4 MakeRotateZMatrix(float angle) {
+	Matrix4x4 result = identity();
+	result.m[0][0] = cosf(angle);
+	result.m[0][1] = sinf(angle);
+	result.m[1][0] = -sinf(angle);
+	result.m[1][1] = cosf(angle);
+	return result;
+}
+
+Matrix4x4 MakeTranslateMatrix(const Vector3& translation) {
+	Matrix4x4 result = identity();
+	result.m[3][0] = translation.x;
+	result.m[3][1] = translation.y;
+	result.m[3][2] = translation.z;
+	return result;
+}

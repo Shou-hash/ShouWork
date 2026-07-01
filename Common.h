@@ -43,6 +43,14 @@ struct Sphere {
 	Vector3 rotate;
 };
 
+struct Material
+{
+	Vector4 color;
+	int32_t enableLighting;
+	float padding[3];
+	Matrix4x4 uvTransform;
+};
+
 struct TransformationMatrix
 {
 	Matrix4x4 WVP;
@@ -54,14 +62,6 @@ struct DirectionalLight
 	Vector4 color;
 	Vector3 direction;
 	float intensity;
-};
-
-struct Material
-{
-	Vector4 color;
-	int32_t enableLighting;
-	float padding[3];       // アライメントを揃えるためのパディング
-	Matrix4x4 uvTransform; // 3x3から4x4に変更してアライメント問題をクリア
 };
 
 // DXGIファクトリー (実体はmain.cpp)
