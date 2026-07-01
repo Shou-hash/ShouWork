@@ -555,6 +555,24 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma region 描画数値
 
+	ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint16_t) * 6);
+	
+	D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite{};
+
+	indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
+
+	indexBufferViewSprite.SizeInBytes = sizeof(uint16_t) * 6;
+
+	indexBufferViewSprite.Format = DXGI_FORMAT_R16_UINT;
+
+	uint32_t* indexDataSprite = nullptr;
+	indexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
+	indexDataSprite[0] = 0; indexDataSprite[1] = 1; indexDataSprite[2] = 2;
+	indexDataSprite[3] = 1; indexDataSprite[4] = 3; indexDataSprite[5] = 2;
+
+
+
+
 	// Sprite用の頂点データも同様に設定する
 	VertexData* vertexDataSprite = nullptr;
 	vertexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataSprite));
@@ -877,6 +895,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			commandList->SetGraphicsRootDescriptorTable(3, currentSpriteTextureHandle); // 元の2番から3番へシフト
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
 			commandList->DrawInstanced(6, 1, 0, 0);
+
+			commandList->IASetIndexBuffer(&indexBufferViewSprite);
+			commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
 			// =================================================================
 
