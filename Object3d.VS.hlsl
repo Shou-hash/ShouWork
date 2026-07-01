@@ -7,6 +7,12 @@ struct TransformationMatrix
 };
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
 
+struct VertexShaderInput
+{
+    float32_t4 position : POSITION;
+    float32_t2 texcoord : TEXCOORD;
+};
+
 VertexShaderOutput main(VertexShaderInput input)
 {
     VertexShaderOutput output;

@@ -4,6 +4,8 @@ struct Material
 {
     float32_t4 color;
     int32_t enableLighting;
+    float32_t3 padding;
+    float32_t4x4 uvTransform;
 };
 ConstantBuffer<Material> gMaterial : register(b0);
 
@@ -28,14 +30,15 @@ PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
     
-    float32_t4 textureColor = gTexture.Sample(gSampler, input.texcoord);
+    // UV変換行列を適用してサンプリング座標を計算
+    float32_t4 transformedUV = mul(float32_t4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
+    float32_t4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
     
     // ライティングの有効・無効による分岐
     if (gMaterial.enableLighting != 0)
     {
         // 光の向きを逆転させ、法線との内積をとる
         float32_t NdotL = dot(normalize(input.normal), -normalize(gDirectionalLight.direction));
-        
         float32_t halfLambert = pow(NdotL * 0.5f + 0.5f, 2.0f);
         
         // 輝度と色を補正して最終カラーを計算

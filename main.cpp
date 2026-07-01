@@ -276,11 +276,52 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	// サイズ（sizeof(VertexData) * 3）で確保
 	ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * 6);
 
-	ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Material)); // ライティング対応のために構造体をMaterialに変更
+#pragma region Index用
+
+	// 修正: uint32_t型で6要素分のサイズ（sizeof(uint32_t) * 6）を正しく確保
+	ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint32_t) * 6);
+
+	D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite{};
+	// リソースの先頭のアドレスから使う
+	indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
+	// 修正: インデックスバッファの総サイズを正しく設定
+	indexBufferViewSprite.SizeInBytes = sizeof(uint32_t) * 6;
+	// 修正: uint32_t型に対応するフォーマット（R32_UINT）に修正
+	indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
+
+	// 修正: ポインタの型を uint32_t* に正しく定義
+	uint32_t* indexDataSprite = nullptr;
+	// 修正: Mapはリソース(indexResourceSprite)に対して呼び出し、受け取り側のポインタアドレスを渡す
+	indexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
+
+	// インデックスデータの書き込み（2つの三角形で四角形を形成）
+	indexDataSprite[0] = 0; // 左下
+	indexDataSprite[1] = 1; // 上
+	indexDataSprite[2] = 2; // 右下
+	indexDataSprite[3] = 1; // 上
+	indexDataSprite[4] = 3; // 右上 (元の重複・不整合を一般的なスプライト矩形インデックスへ想定修正)
+	indexDataSprite[5] = 2; // 右下
+
+	// マテリアル用のTransform設定（初期化）
+	struct Transform uvTransformSprite {
+		{ 1.0f, 1.0f, 1.0f }, // Scale
+		{ 0.0f, 0.0f, 0.0f }, // Rotate
+		{ 0.0f, 0.0f, 0.0f }  // Translate
+	};
+
+	// マテリアル用リソースの作成（サイズは正しくアライメントされた構造体サイズ）
+	ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Material));
+
+	// マテリアルデータのマッピング
 	Material* materialData = nullptr;
 	materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
-	materialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f); // テクスチャの色をそのまま出すために白(1,1,1,1)を推奨
-	materialData->enableLighting = 1;                     // ライティングをデフォルトで有効化
+
+	// 初期データの書き込み
+	materialData->color = Vector4{ 1.0f, 1.0f, 1.0f, 1.0f };
+	materialData->enableLighting = false; // スプライトなので基本はライティングOFF
+	materialData->uvTransform = MakeIdentity4x4(); // 初期値は単位行列
+
+#pragma endregion
 
 	// 追加：平行光源用定数バッファの作成と初期化（Common.h の DirectionalLight 構造体を使用）
 	ID3D12Resource* directionalLightResource = CreateBufferResource(device, sizeof(DirectionalLight));
@@ -715,29 +756,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
-#pragma region Index用
-
-	ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint16_t) * 3);
-
-	D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite{};
-	// リソースの先頭のアドレスから使う
-	indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
-	// インデックスバッファのサイズは6つ分（1つの三角形）
-	indexBufferViewSprite.SizeInBytes = sizeof(uint16_t) * 6;
-	// インデックスはuint32_t型（16bit）で扱う
-	indexBufferViewSprite.Format = DXGI_FORMAT_R16_UINT;
-
-	uint32_t* indexDataSprite = nullptr;
-	indexDataSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
-	indexDataSprite[0] = 0; // 左下
-	indexDataSprite[1] = 1; // 上
-	indexDataSprite[2] = 2; // 右下
-	indexDataSprite[3] = 1; // 右下
-	indexDataSprite[4] = 3; // 上
-	indexDataSprite[5] = 2; // 左上
-
-#pragma endregion
-
 	// ★追加：テクスチャ切り替えフラグ
 	bool useMonsterBall = true;
 	// ★追加：スプライト用のテクスチャ切り替えフラグを定義
@@ -762,7 +780,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			// 三角形の回転
 			transform.rotate.y += 0.03f;
 
-			// ★追加：球体も同じ速度でY軸回転させる
+			// 球体も同じ速度でY軸回転させる
 			sphere.rotate.y += 0.03f;
 
 			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
@@ -776,6 +794,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			transformationMatrixDataSphere3D->WVP = worldViewProjectionMatrixSphere;
 			transformationMatrixDataSphere3D->World = worldMatrixSphere;
 
+#ifdef USE_IMGUI
+
 			ImGui::Begin("Ortho Matrix Config");
 			ImGui::SliderFloat("Left", &orthoLeft, -200.0f, 200.0f);
 			ImGui::SliderFloat("Right", &orthoRight, 1000.0f, 2000.0f);
@@ -783,24 +803,26 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			ImGui::SliderFloat("Bottom", &orthoBottom, 500.0f, 1000.0f);
 			ImGui::End();
 
+#endif // USE_IMGUI
+
 			// 毎フレーム更新して行列に適用
 			projectionMatrixSprite = MakeOrthographicMatrix(orthoLeft, orthoRight, orthoTop, orthoBottom, 0.0f, 100.0f);
 
 			ImGui::ShowDemoWindow();
 
-			// ★追加：ImGuiにテクスチャ切り替え用チェックボックスを追加
+			// ImGuiにテクスチャ切り替え用チェックボックスを追加
 			ImGui::Checkbox("use MonsterBall Texture", &useMonsterBall);
-			// ★追加：IMGUIにスプライト用チェックボックスを追加
+			// IMGUIにスプライト用チェックボックスを追加
 			ImGui::Checkbox("use Sprite MonsterBall Texture", &useSpriteMonsterBall);
 
-			// 追加：ImGuiによる平行光源とマテリアルの調整機能
+			// ImGuiによる平行光源とマテリアルの調整機能
 			ImGui::Begin("Lighting Settings");
 			ImGui::ColorEdit4("Material Color", &materialData->color.x);
 			ImGui::Checkbox("Enable Lighting", reinterpret_cast<bool*>(&materialData->enableLighting));
 			ImGui::Separator();
 			ImGui::ColorEdit4("Light Color", &directionalLightData->color.x);
 
-			// ★資料の指定通り、UI操作用に用意したテンポラリ配列（uiLightDirection）をSliderFloat3に渡す
+			// UI操作用に用意したテンポラリ配列（uiLightDirection）をSliderFloat3に渡す
 			ImGui::SliderFloat3("Light Direction", uiLightDirection, -1.0f, 1.0f);
 			ImGui::SliderFloat("Light Intensity", &directionalLightData->intensity, 0.0f, 5.0f);
 
@@ -820,6 +842,47 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 				// 万が一長さが0（未入力や不正値）だった場合のフォールバック（デフォルトの下向き）
 				directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
 			}
+
+#ifdef USE_IMGUI
+			// ImGuiによるUV Transformパラメータの編集UI
+			ImGui::Begin("Sprite UV Transform");
+			ImGui::DragFloat2("UV Scale", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
+			ImGui::DragFloat3("UV Rotate", &uvTransformSprite.rotate.x, 0.01f, -std::numbers::pi_v<float>, std::numbers::pi_v<float>);
+			ImGui::DragFloat2("UV Translate", &uvTransformSprite.translate.x, 0.01f, -10.0f, 10.0f);
+			ImGui::End();
+#endif // USE_IMGUI
+
+			// 2D（UV）空間でのSRT行列の作成
+			// ※3x3変換の代わりに4x4の計算（MakeAffineMatrix）を流用して計算します
+			Matrix4x4 matScale = {
+				uvTransformSprite.scale.x, 0.0f, 0.0f, 0.0f,
+				0.0f, uvTransformSprite.scale.y, 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f, 0.0f,
+				0.0f, 0.0f, 0.0f, 1.0f
+			};
+
+			// Z軸回転（2D平面上の回転）
+			float sinZ = std::sin(uvTransformSprite.rotate.z);
+			float cosZ = std::cos(uvTransformSprite.rotate.z);
+			Matrix4x4 matRotate = {
+				cosZ,  sinZ, 0.0f, 0.0f,
+				-sinZ, cosZ, 0.0f, 0.0f,
+				0.0f,  0.0f, 1.0f, 0.0f,
+				0.0f,  0.0f, 0.0f, 1.0f
+			};
+
+			Matrix4x4 matTranslate = {
+				1.0f, 0.0f, 0.0f, 0.0f,
+				0.0f, 1.0f, 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f, 0.0f,
+				uvTransformSprite.translate.x, uvTransformSprite.translate.y, 0.0f, 1.0f
+			};
+
+			// S -> R -> T の順で行列を合成
+			Matrix4x4 uvTransformMatrix = Multiply(matScale, Multiply(matRotate, matTranslate));
+
+			// 定数バッファ（GPU上のメモリ）へ行列データを転送
+			materialData->uvTransform = uvTransformMatrix;
 
 			ImGui::End();
 
