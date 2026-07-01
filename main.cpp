@@ -276,6 +276,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	materialData->enableLighting = 1;
 	materialData->uvTransform = MakeIdentity4x4(); // 単位行列で初期化
 
+	// 【追加】スプライト用のマテリアル
+	ID3D12Resource* materialResourceSprite = CreateBufferResource(device, sizeof(Material));
+	Material* materialDataSprite = nullptr;
+	materialResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&materialDataSprite));
+	materialDataSprite->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+	materialDataSprite->enableLighting = 0; // スプライトは通常ライティングしないので0に
+	materialDataSprite->uvTransform = MakeIdentity4x4();
+
 	ID3D12Resource* directionalLightResource = CreateBufferResource(device, sizeof(DirectionalLight));
 	DirectionalLight* directionalLightData = nullptr;
 	directionalLightResource->Map(0, nullptr, reinterpret_cast<void**>(&directionalLightData));
@@ -513,11 +521,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma region 描画数値
 
-	ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(VertexData) * 6);
+	ID3D12Resource* indexResourceSprite = CreateBufferResource(device, sizeof(uint32_t) * 6);
 
 	D3D12_INDEX_BUFFER_VIEW indexBufferViewSprite{};
 	indexBufferViewSprite.BufferLocation = indexResourceSprite->GetGPUVirtualAddress();
-	indexBufferViewSprite.SizeInBytes = sizeof(VertexData) * 6;
+	indexBufferViewSprite.SizeInBytes = sizeof(uint32_t) * 6;
 	indexBufferViewSprite.Format = DXGI_FORMAT_R32_UINT;
 
 	uint32_t* indexDataSprite = nullptr;
@@ -751,7 +759,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			uvTransformMatrix = Multiply(uvTransformMatrix, MakeTranslateMatrix(uvTransformSprite.translate));
 
 			// materialDataを共通で更新（Sprite描画時、またはマテリアル共通化の想定に対応）
-			materialData->uvTransform = uvTransformMatrix;
+			materialDataSprite->uvTransform = uvTransformMatrix;
 
 			ImGui::End();
 
@@ -818,15 +826,16 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			commandList->DrawInstanced(kNumSphereVertices, 1, 0, 0);
 
 			// --- 3. 2Dオブジェクト（スプライト）の描画 ---
+			// スプライト用のマテリアルリソースをバインド
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(2, transformationMatrixResourceSprite->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootDescriptorTable(3, currentSpriteTextureHandle);
-			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
-			commandList->DrawInstanced(6, 1, 0, 0);
 
+			// vertex buffer と index buffer を両方セットして、Indexed の方だけで描画する
+			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
 			commandList->IASetIndexBuffer(&indexBufferViewSprite);
-			commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+			commandList->DrawIndexedInstanced(6, 1, 0, 0, 0); // これだけでOK！
 
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 
@@ -887,6 +896,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		textureResource2->Release();
 	}
 
+	if (indexResourceSprite) {
+		indexResourceSprite->Release();
+	}
+
 #ifdef _DEBUG
 
 	debugController->Release();
@@ -905,6 +918,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	vertexResource->Release();
 	vertexResourceSprite->Release();
+
+	// インデックスリソースの解放漏れを修正
+	if (indexResourceSprite) {
+		indexResourceSprite->Release();
+	}
+
 	transformationMatrixResourceSprite->Release();
 	vertexResourceSphere3D->Release();
 	transformationMatrixResourceSphere3D->Release();
@@ -919,6 +938,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	vertexShaderBlob->Release();
 	materialResource->Release();
 	directionalLightResource->Release();
+	materialResourceSprite->Release();
 
 	CoUninitialize();
 	return 0;
