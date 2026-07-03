@@ -268,7 +268,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * 6);
 
-	// 【修正】マテリアルデータのセットアップ（スライド2枚目「初期化処理の追加」に準拠）
+	// マテリアルデータのセットアップ（スライド2枚目「初期化処理の追加」に準拠）
 	ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Material));
 	Material* materialData = nullptr;
 	materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
@@ -276,7 +276,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	materialData->enableLighting = 1;
 	materialData->uvTransform = MakeIdentity4x4(); // 単位行列で初期化
 
-	// 【追加】スプライト用のマテリアル
+	// スプライト用のマテリアル
 	ID3D12Resource* materialResourceSprite = CreateBufferResource(device, sizeof(Material));
 	Material* materialDataSprite = nullptr;
 	materialResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&materialDataSprite));
@@ -291,11 +291,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
 	directionalLightData->intensity = 1.0f;
 
-	ID3D12Resource* vertexResourceSprite = CreateBufferResource(device, sizeof(VertexData) * 6);
+	ID3D12Resource* vertexResourceSprite = CreateBufferResource(device, sizeof(VertexData) * 4);
 
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferViewSprite{};
 	vertexBufferViewSprite.BufferLocation = vertexResourceSprite->GetGPUVirtualAddress();
-	vertexBufferViewSprite.SizeInBytes = sizeof(VertexData) * 6;
+	vertexBufferViewSprite.SizeInBytes = sizeof(VertexData) * 4;
 	vertexBufferViewSprite.StrideInBytes = sizeof(VertexData);
 
 #pragma endregion
@@ -530,14 +530,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	uint32_t* indexDataSprite = nullptr;
 	indexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&indexDataSprite));
-	indexDataSprite[0] = 0;
-	indexDataSprite[1] = 1;
-	indexDataSprite[2] = 2;
-	indexDataSprite[3] = 1;
-	indexDataSprite[4] = 3;
-	indexDataSprite[5] = 2;
+	indexDataSprite[0] = 0; // 左下
+	indexDataSprite[1] = 1; // 左上
+	indexDataSprite[2] = 2; // 右下
 
-	// 【修正】スライド2枚目「初期化処理の追加」に合わせた変数初期化
+	indexDataSprite[3] = 1; // 左上
+	indexDataSprite[4] = 3; // 右上
+	indexDataSprite[5] = 2; // 右下
+
+	// スライド2枚目「初期化処理の追加」に合わせた変数初期化
 	struct Transform uvTransformSprite {
 		{ 1.0f, 1.0f, 1.0f },
 		{ 0.0f, 0.0f, 0.0f },
@@ -547,31 +548,21 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	VertexData* vertexDataSprite = nullptr;
 	vertexResourceSprite->Map(0, nullptr, reinterpret_cast<void**>(&vertexDataSprite));
 
-	vertexDataSprite[0].position = { 0.0f, 360.0f, 0.0f, 1.0f };
-	vertexDataSprite[0].u = 0.0f;
-	vertexDataSprite[0].v = 1.0f;
+	vertexDataSprite[0].position = { 0.0f, 360.0f, 0.0f, 1.0f };   // 左下
+	vertexDataSprite[0].u = 0.0f; vertexDataSprite[0].v = 1.0f;
 	vertexDataSprite[0].normal = { 0.0f, 0.0f, -1.0f };
-	vertexDataSprite[1].position = { 0.0f, 0.0f, 0.0f, 1.0f };
-	vertexDataSprite[1].u = 0.0f;
-	vertexDataSprite[1].v = 0.0f;
+
+	vertexDataSprite[1].position = { 0.0f, 0.0f, 0.0f, 1.0f };     // 左上
+	vertexDataSprite[1].u = 0.0f; vertexDataSprite[1].v = 0.0f;
 	vertexDataSprite[1].normal = { 0.0f, 0.0f, -1.0f };
-	vertexDataSprite[2].position = { 640.0f, 360.0f, 0.0f, 1.0f };
-	vertexDataSprite[2].u = 1.0f;
-	vertexDataSprite[2].v = 1.0f;
+
+	vertexDataSprite[2].position = { 640.0f, 360.0f, 0.0f, 1.0f }; // 右下
+	vertexDataSprite[2].u = 1.0f; vertexDataSprite[2].v = 1.0f;
 	vertexDataSprite[2].normal = { 0.0f, 0.0f, -1.0f };
 
-	vertexDataSprite[3].position = { 0.0f, 0.0f, 0.0f, 1.0f };
-	vertexDataSprite[3].u = 0.0f;
-	vertexDataSprite[3].v = 0.0f;
+	vertexDataSprite[3].position = { 640.0f, 0.0f, 0.0f, 1.0f };   // 右上
+	vertexDataSprite[3].u = 1.0f; vertexDataSprite[3].v = 0.0f;
 	vertexDataSprite[3].normal = { 0.0f, 0.0f, -1.0f };
-	vertexDataSprite[4].position = { 640.0f, 0.0f, 0.0f, 1.0f };
-	vertexDataSprite[4].u = 1.0f;
-	vertexDataSprite[4].v = 0.0f;
-	vertexDataSprite[4].normal = { 0.0f, 0.0f, -1.0f };
-	vertexDataSprite[5].position = { 640.0f, 360.0f, 0.0f, 1.0f };
-	vertexDataSprite[5].u = 1.0f;
-	vertexDataSprite[5].v = 1.0f;
-	vertexDataSprite[5].normal = { 0.0f, 0.0f, -1.0f };
 
 	ID3D12Resource* transformationMatrixResourceSprite = CreateBufferResource(device, sizeof(TransformationMatrix));
 
@@ -748,7 +739,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 				directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
 			}
 
-			// 【修正】スライド3枚目「編集と行列の作成」を忠実に再現
+			// スライド3枚目「編集と行列の作成」を忠実に再現
 			ImGui::DragFloat2("UVTranslate", &uvTransformSprite.translate.x, 0.01f, -10.0f, 10.0f);
 			ImGui::DragFloat2("UVScale", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
 			ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
@@ -827,15 +818,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			// --- 3. 2Dオブジェクト（スプライト）の描画 ---
 			// スプライト用のマテリアルリソースをバインド
-			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+			commandList->SetGraphicsRootConstantBufferView(0, materialResourceSprite->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(2, transformationMatrixResourceSprite->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootDescriptorTable(3, currentSpriteTextureHandle);
 
-			// vertex buffer と index buffer を両方セットして、Indexed の方だけで描画する
+			// vertex buffer と index buffer を両方セットして、Indexed の方だけで描画
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite);
 			commandList->IASetIndexBuffer(&indexBufferViewSprite);
-			commandList->DrawIndexedInstanced(6, 1, 0, 0, 0); // これだけでOK！
+			commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 
@@ -894,10 +885,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	}
 	if (textureResource2) {
 		textureResource2->Release();
-	}
-
-	if (indexResourceSprite) {
-		indexResourceSprite->Release();
 	}
 
 #ifdef _DEBUG

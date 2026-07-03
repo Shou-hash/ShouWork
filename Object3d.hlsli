@@ -15,6 +15,6 @@ struct VertexShaderInput
 struct Material
 {
     float32_t4 color;
-    float32_t enableLighting;
+    uint32_t enableLighting;
     float32_t4x4 uvTransform;
 };
