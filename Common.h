@@ -46,7 +46,7 @@ struct Sphere {
 struct Material
 {
 	Vector4 color;
-	uint32_t enableLighting;
+	int32_t enableLighting;
 	float padding[3];
 	Matrix4x4 uvTransform;
 };
