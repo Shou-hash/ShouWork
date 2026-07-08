@@ -6,7 +6,7 @@
 #include <wrl.h>
 
 // DXGIファクトリーの実体定義
-Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory;
+IDXGIFactory7* dxgiFactory = nullptr;
 Microsoft::WRL::ComPtr<ID3D12Device> device;
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
@@ -379,7 +379,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
+#pragma region モデルデータの読み込み
+
+	// テクスチャ読み込みの前に、OBJファイルを読み込んでマテリアル情報を確定させる
 	ModelData modelData = LoadObjFile("Resources", "plane.obj");
+
+#pragma endregion
 
 	ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * modelData.vertices.size());
 

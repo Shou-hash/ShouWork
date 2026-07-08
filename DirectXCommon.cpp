@@ -246,8 +246,16 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 		std::istringstream s(line);
 		s >> identifier; // 先頭の識別子を読み込む
 
+		// 【追加】マテリアルファイルの読み込み
+		if (identifier == "mtllib")
+		{
+			std::string materialFileName;
+			s >> materialFileName;
+			// mtlファイルを読み込んで、モデルデータのマテリアルに格納
+			modelData.material = LoadMaterialTemplateFile(directoryPath, materialFileName);
+		}
 		// 頂点位置
-		if (identifier == "v")
+		else if (identifier == "v")
 		{
 			Vector4 position;
 			s >> position.x >> position.y >> position.z;
@@ -259,7 +267,6 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 		{
 			Vector2 texcoord;
 			s >> texcoord.x >> texcoord.y;
-			// OBJはV方向が逆なので反転（必要に応じて）
 			texcoord.y = 1.0f - texcoord.y;
 			texcoords.push_back(texcoord);
 		}
@@ -273,47 +280,37 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 		// 面（三角形）
 		else if (identifier == "f")
 		{
-			// 資料に基づき、1面分の3頂点を一時的に保持する配列を用意
 			VertexData triangle[3];
 
-			// フライアングルは3頂点分まわる
 			for (int32_t faceVertex = 0; faceVertex < 3; ++faceVertex)
 			{
 				std::string vertexDefinition;
 				s >> vertexDefinition;
 
-				// 識別子 "v/vt/vn" を分解する
 				std::istringstream v(vertexDefinition);
 				std::string indexElement;
 
-				// 頂点位置のインデックス
 				std::getline(v, indexElement, '/');
 				size_t positionIndex = std::stoull(indexElement) - 1;
 
-				// テクスチャ座標のインデックス
 				std::getline(v, indexElement, '/');
 				size_t texcoordIndex = std::stoull(indexElement) - 1;
 
-				// 法線のインデックス
 				std::getline(v, indexElement, '/');
 				size_t normalIndex = std::stoull(indexElement) - 1;
 
-				// インデックスから実際のデータを取り出して頂点を構築
 				VertexData vertex;
 				vertex.position = positions[positionIndex];
 				vertex.u = texcoords[texcoordIndex].x;
 				vertex.v = texcoords[texcoordIndex].y;
 				vertex.normal = normals[normalIndex];
 
-				// 右手系から左手系への変換：x座標と法線xの反転
 				vertex.position.x *= -1.0f;
 				vertex.normal.x *= -1.0f;
 
-				// 一時配列に格納
 				triangle[faceVertex] = vertex;
 			}
 
-			// 頂点を逆順（2, 1, 0 の順）で登録することで、回り順を逆にする
 			modelData.vertices.push_back(triangle[2]);
 			modelData.vertices.push_back(triangle[1]);
 			modelData.vertices.push_back(triangle[0]);
