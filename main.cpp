@@ -2,9 +2,12 @@
 #include "WinApp.h"
 #include "DirectXCommon.h"
 #include <numbers>
+#include "ResourceObject.h"
+#include <wrl.h>
 
 // DXGIファクトリーの実体定義
-IDXGIFactory7* dxgiFactory = nullptr;
+Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory;
+Microsoft::WRL::ComPtr<ID3D12Device> device;
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
@@ -194,7 +197,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	ID3D12DescriptorHeap* rtvDescriptorHeap = nullptr;
 	rtvDescriptorHeap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2, false);
 
-	ID3D12DescriptorHeap* srvDescriptorHeap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap = 
+		CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
 
 	ID3D12Resource* swapChainResources[2] = { nullptr };
 	hr = swapChain->GetBuffer(0, IID_PPV_ARGS(&swapChainResources[0]));
@@ -280,13 +284,19 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	DirectX::ScratchImage mipImages = LoadTexture("Resources/uvChecker.png");
 	const DirectX::TexMetadata& metadata = mipImages.GetMetadata();
-	ID3D12Resource* textureResource1 = CreateTextureResource(device, metadata);
-	UploadTextureData(textureResource1, mipImages);
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource1 = 
+		CreateTextureResource(device, metadata);
+
+	UploadTextureData(textureResource1.Get(), mipImages);
 
 	DirectX::ScratchImage mipImages2 = LoadTexture("Resources/monsterBall.png");
 	const DirectX::TexMetadata& metadata2 = mipImages2.GetMetadata();
-	ID3D12Resource* textureResource2 = CreateTextureResource(device, metadata2);
-	UploadTextureData(textureResource2, mipImages2);
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 =
+		CreateTextureResource(device, metadata2);
+
+	UploadTextureData(textureResource2.Get(), mipImages2);
 
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = kClientWidth;
@@ -336,7 +346,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU1 = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 	textureSrvHandleCPU1.ptr += descriptorSize * 1;
 	textureSrvHandleGPU1.ptr += descriptorSize * 1;
-	device->CreateShaderResourceView(textureResource1, &srvDesc1, textureSrvHandleCPU1);
+	device->CreateShaderResourceView(textureResource1.Get(), &srvDesc1, textureSrvHandleCPU1);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc2{};
 	srvDesc2.Format = metadata2.format;
@@ -348,7 +358,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 	textureSrvHandleCPU2.ptr += descriptorSize * 2;
 	textureSrvHandleGPU2.ptr += descriptorSize * 2;
-	device->CreateShaderResourceView(textureResource2, &srvDesc2, textureSrvHandleCPU2);
+	device->CreateShaderResourceView(textureResource2.Get(), &srvDesc2, textureSrvHandleCPU2);
 
 #ifdef USE_IMGUI
 
@@ -369,7 +379,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
-	ModelData modelData = LoadObjFile("Resources","plane.obj");
+	ModelData modelData = LoadObjFile("Resources", "plane.obj");
 
 	ID3D12Resource* vertexResource = CreateBufferResource(device, sizeof(VertexData) * modelData.vertices.size());
 
@@ -381,7 +391,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	VertexData* vertexData = nullptr;
 	vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
-	std::memcpy(vertexData, modelData.vertices.data(), sizeof(VertexData)* modelData.vertices.size());
+	std::memcpy(vertexData, modelData.vertices.data(), sizeof(VertexData) * modelData.vertices.size());
 
 #pragma region Imguiの初期化
 
@@ -394,7 +404,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	ImGui_ImplDX12_Init(device,
 		swapChainDesc.BufferCount,
 		rtvDesc.Format,
-		srvDescriptorHeap,
+		srvDescriptorHeap.Get(),
 		srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
 		srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 	ImGuiIO& io = ImGui::GetIO();
@@ -611,7 +621,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			commandList->SetGraphicsRootSignature(rootSignature);
 
-			ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap };
+			ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap.Get() };
 			commandList->SetDescriptorHeaps(1, descriptorHeaps);
 			commandList->SetPipelineState(graphicsPipelineState);
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -677,52 +687,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	}
 
 	CloseHandle(fenceEvent);
-	fence->Release();
-	rtvDescriptorHeap->Release();
-	swapChainResources[0]->Release();
-	swapChainResources[1]->Release();
-	swapChain->Release();
-	commandList->Release();
-	commandAllocator->Release();
-	commandQueue->Release();
-	device->Release();
-	useAdapter->Release();
-	dxgiFactory->Release();
-
-	if (textureResource1) {
-		textureResource1->Release();
-	}
-	if (textureResource2) {
-		textureResource2->Release();
-	}
-
-#ifdef _DEBUG
-
-	debugController->Release();
-
-#endif
-
 	CloseWindow(hwnd);
 
 #ifdef USE_IMGUI
-
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
-
 #endif
-
-	graphicsPipelineState->Release();
-	signatureBlob->Release();
-	if (errorBlob)
-	{
-		errorBlob->Release();
-	}
-	rootSignature->Release();
-	pixelShaderBlob->Release();
-	vertexShaderBlob->Release();
-	materialResource->Release();
-	directionalLightResource->Release();
 
 	CoUninitialize();
 	return 0;
