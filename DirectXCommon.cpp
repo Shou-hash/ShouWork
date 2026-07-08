@@ -1,4 +1,6 @@
 #include "DirectXCommon.h"
+#include <fstream>
+#include <sstream>
 
 ID3D12DescriptorHeap* CreateDescriptorHeap(
 	ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors, bool shadervisible)
@@ -225,4 +227,129 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descrip
 	D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
 	handleGPU.ptr += descriptorSize * Index;
 	return handleGPU;
+}
+
+ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileName)
+{
+	ModelData modelData;            // 構築するモデルデータ
+	std::vector<Vector4> positions; // 位置
+	std::vector<Vector3> normals;   // 法線
+	std::vector<Vector2> texcoords; // テクスチャ座標
+	std::string line;               // ファイルから読んだ1行を格納する
+
+	std::ifstream file(directoryPath + "/" + fileName); // ファイルを開く
+	assert(file.is_open()); // 開けなかったら止める
+
+	while (std::getline(file, line))
+	{
+		std::string identifier;
+		std::istringstream s(line);
+		s >> identifier; // 先頭の識別子を読み込む
+
+		// 頂点位置
+		if (identifier == "v")
+		{
+			Vector4 position;
+			s >> position.x >> position.y >> position.z;
+			position.w = 1.0f;
+			positions.push_back(position);
+		}
+		// テクスチャ座標
+		else if (identifier == "vt")
+		{
+			Vector2 texcoord;
+			s >> texcoord.x >> texcoord.y;
+			// OBJはV方向が逆なので反転（必要に応じて）
+			texcoord.y = 1.0f - texcoord.y;
+			texcoords.push_back(texcoord);
+		}
+		// 法線
+		else if (identifier == "vn")
+		{
+			Vector3 normal;
+			s >> normal.x >> normal.y >> normal.z;
+			normals.push_back(normal);
+		}
+		// 面（三角形）
+		else if (identifier == "f")
+		{
+			// 資料に基づき、1面分の3頂点を一時的に保持する配列を用意
+			VertexData triangle[3];
+
+			// フライアングルは3頂点分まわる
+			for (int32_t faceVertex = 0; faceVertex < 3; ++faceVertex)
+			{
+				std::string vertexDefinition;
+				s >> vertexDefinition;
+
+				// 識別子 "v/vt/vn" を分解する
+				std::istringstream v(vertexDefinition);
+				std::string indexElement;
+
+				// 頂点位置のインデックス
+				std::getline(v, indexElement, '/');
+				size_t positionIndex = std::stoull(indexElement) - 1;
+
+				// テクスチャ座標のインデックス
+				std::getline(v, indexElement, '/');
+				size_t texcoordIndex = std::stoull(indexElement) - 1;
+
+				// 法線のインデックス
+				std::getline(v, indexElement, '/');
+				size_t normalIndex = std::stoull(indexElement) - 1;
+
+				// インデックスから実際のデータを取り出して頂点を構築
+				VertexData vertex;
+				vertex.position = positions[positionIndex];
+				vertex.u = texcoords[texcoordIndex].x;
+				vertex.v = texcoords[texcoordIndex].y;
+				vertex.normal = normals[normalIndex];
+
+				// 右手系から左手系への変換：x座標と法線xの反転
+				vertex.position.x *= -1.0f;
+				vertex.normal.x *= -1.0f;
+
+				// 一時配列に格納
+				triangle[faceVertex] = vertex;
+			}
+
+			// 頂点を逆順（2, 1, 0 の順）で登録することで、回り順を逆にする
+			modelData.vertices.push_back(triangle[2]);
+			modelData.vertices.push_back(triangle[1]);
+			modelData.vertices.push_back(triangle[0]);
+		}
+	}
+
+	return modelData;
+}
+
+MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& fileName)
+{
+	MaterialData materialData;
+	std::string line;
+	std::ifstream file(directoryPath + "/" + fileName);
+	assert(file.is_open());
+
+	while (std::getline(file, line))
+	{
+		std::string identifier;
+		std::istringstream s(line);
+		s >> identifier;
+
+		if (identifier == "map_Kd")
+		{
+			std::string textureFileName;
+			s >> textureFileName;
+			materialData.textureFilePath = directoryPath + "/" + textureFileName;
+			break; // 1つのマテリアルにつき1つのテクスチャのみを想定
+		}
+		else if (identifier == "mtllib")
+		{
+			std::string materialFileName;
+			s >> materialFileName;
+
+			materialData = LoadMaterialTemplateFile(directoryPath, materialFileName);
+		}
+	}
+	return materialData;
 }

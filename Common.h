@@ -30,11 +30,23 @@ struct Vector4 {
 	float x, y, z, w;
 };
 
+struct Vector2
+{
+	float x, y;
+};
+
 struct Transform
 {
 	Vector3 scale;
 	Vector3 rotate;
 	Vector3 translate;
+};
+
+// 頂点データ構造体の定義をトップレベルに移動
+struct VertexData {
+	Vector4 position;
+	float u, v;
+	Vector3 normal;
 };
 
 struct Sphere {
@@ -62,6 +74,16 @@ struct DirectionalLight
 	Vector4 color;
 	Vector3 direction;
 	float intensity;
+};
+
+struct MaterialData {
+	std::string textureFilePath;
+};
+
+struct ModelData
+{
+	std::vector<VertexData> vertices;
+	MaterialData material;
 };
 
 // DXGIファクトリー (実体はmain.cpp)
