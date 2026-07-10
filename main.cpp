@@ -280,22 +280,38 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
+#pragma region モデルデータの読み込み
+
+	std::string modelDir = "Resources";
+	std::string modelFile = "plane.obj";
+	std::string fullPath = modelDir + "/" + modelFile;
+
+	if (!std::filesystem::exists(fullPath))
+	{
+		MessageBoxA(nullptr, "モデルファイルが見つかりません。", "Resource Error", MB_OK | MB_ICONERROR);
+	}
+
+	// 1. 先にモデルを読み込む
+	ModelData modelData = LoadObjFile(modelDir, modelFile);
+
+#pragma endregion
+
 #pragma region Textureの読み込みとSRVの作成
 
-	DirectX::ScratchImage mipImages = LoadTexture("Resources/uvChecker.png");
+	// 2. モデルデータから取得したテクスチャパスを使ってロードする
+	// ※ 指摘事項: ハードコード(Resources/uvChecker.png)を廃止し、modelDataのパスを使用
+	std::string texturePath = modelDir + "/" + modelData.material.textureFilePath;
+	DirectX::ScratchImage mipImages = LoadTexture(texturePath);
 	const DirectX::TexMetadata& metadata = mipImages.GetMetadata();
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource1 = 
-		CreateTextureResource(device, metadata);
-
+	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource1 = CreateTextureResource(device, metadata);
 	UploadTextureData(textureResource1.Get(), mipImages);
 
+	// 3. デバッグ用の2枚目のテクスチャ（モンスターボール）をロードする
 	DirectX::ScratchImage mipImages2 = LoadTexture("Resources/monsterBall.png");
 	const DirectX::TexMetadata& metadata2 = mipImages2.GetMetadata();
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 =
-		CreateTextureResource(device, metadata2);
-
+	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 = CreateTextureResource(device, metadata2);
 	UploadTextureData(textureResource2.Get(), mipImages2);
 
 	D3D12_RESOURCE_DESC resourceDesc{};
@@ -342,6 +358,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	UINT descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
+	// modelDataから生成したテクスチャ(textureResource1)を登録
 	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU1 = srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU1 = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 	textureSrvHandleCPU1.ptr += descriptorSize * 1;
@@ -376,30 +393,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	imguiSrvHandleGPU2.ptr += descriptorSize;
 
 #endif
-
-#pragma endregion
-
-#pragma region モデルデータの読み込み
-
-	// テクスチャ読み込みの前に、OBJファイルを読み込んでマテリアル情報を確定させる
-	std::string modelDir = "Resources";
-	std::string modelFile = "plane.obj";
-	std::string fullPath = modelDir + "/" + modelFile;
-
-	// ファイルの存在チェック
-	if (!std::filesystem::exists(fullPath))
-	{
-		// 開発者が気付きやすいようにメッセージボックスやコンソールで警告
-		MessageBoxA(nullptr,
-			("モデルファイルが見つかりません:\n" + fullPath + "\n\nビルド出力ディレクトリ(exeの階層)に 'Resources' フォルダが配置されているか確認してください。").c_str(),
-			"Resource Error",
-			MB_OK | MB_ICONERROR);
-
-		// 続行すると描画頂点数が0になりDrawInstancedで警告が出る可能性があるため、
-		// 最低限のダミーデータを手動で入れるなどのフォールバックがあるとより安全です。
-	}
-
-	ModelData modelData = LoadObjFile(modelDir, modelFile);
 
 #pragma endregion
 
