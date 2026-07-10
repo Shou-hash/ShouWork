@@ -382,7 +382,24 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 #pragma region モデルデータの読み込み
 
 	// テクスチャ読み込みの前に、OBJファイルを読み込んでマテリアル情報を確定させる
-	ModelData modelData = LoadObjFile("Resources", "plane.obj");
+	std::string modelDir = "Resources";
+	std::string modelFile = "plane.obj";
+	std::string fullPath = modelDir + "/" + modelFile;
+
+	// ファイルの存在チェック
+	if (!std::filesystem::exists(fullPath))
+	{
+		// 開発者が気付きやすいようにメッセージボックスやコンソールで警告
+		MessageBoxA(nullptr,
+			("モデルファイルが見つかりません:\n" + fullPath + "\n\nビルド出力ディレクトリ(exeの階層)に 'Resources' フォルダが配置されているか確認してください。").c_str(),
+			"Resource Error",
+			MB_OK | MB_ICONERROR);
+
+		// 続行すると描画頂点数が0になりDrawInstancedで警告が出る可能性があるため、
+		// 最低限のダミーデータを手動で入れるなどのフォールバックがあるとより安全です。
+	}
+
+	ModelData modelData = LoadObjFile(modelDir, modelFile);
 
 #pragma endregion
 

@@ -238,7 +238,13 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 	std::string line;               // ファイルから読んだ1行を格納する
 
 	std::ifstream file(directoryPath + "/" + fileName); // ファイルを開く
-	assert(file.is_open()); // 開けなかったら止める
+
+	// ファイルオープン失敗時のエラーログと安全な早期リターン
+	if (!file.is_open())
+	{
+		Log("Error: Failed to open OBJ file: " + directoryPath + "/" + fileName + "\n");
+		return modelData;
+	}
 
 	while (std::getline(file, line))
 	{
@@ -246,13 +252,17 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 		std::istringstream s(line);
 		s >> identifier; // 先頭の識別子を読み込む
 
-		// 【追加】マテリアルファイルの読み込み
 		if (identifier == "mtllib")
 		{
 			std::string materialFileName;
 			s >> materialFileName;
-			// mtlファイルを読み込んで、モデルデータのマテリアルに格納
-			modelData.material = LoadMaterialTemplateFile(directoryPath, materialFileName);
+			// 既存のマテリアル情報を上書きせず、必要に応じてマテリアルファイルを読み込む
+			// （複数mtllibがある場合は、新しいテクスチャパスがあれば更新する方針）
+			MaterialData tempMaterial = LoadMaterialTemplateFile(directoryPath, materialFileName);
+			if (!tempMaterial.textureFilePath.empty())
+			{
+				modelData.material.textureFilePath = tempMaterial.textureFilePath;
+			}
 		}
 		// 頂点位置
 		else if (identifier == "v")
@@ -290,21 +300,53 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 				std::istringstream v(vertexDefinition);
 				std::string indexElement;
 
-				std::getline(v, indexElement, '/');
-				size_t positionIndex = std::stoull(indexElement) - 1;
+				// 位置インデックスの取得
+				size_t positionIndex = 0;
+				if (std::getline(v, indexElement, '/') && !indexElement.empty()) {
+					positionIndex = std::stoull(indexElement) - 1;
+				}
 
-				std::getline(v, indexElement, '/');
-				size_t texcoordIndex = std::stoull(indexElement) - 1;
+				// テクスチャ座標インデックスの取得 (v//vn のような空文字に対応)
+				size_t texcoordIndex = 0;
+				bool hasTexcoord = false;
+				if (std::getline(v, indexElement, '/') && !indexElement.empty()) {
+					texcoordIndex = std::stoull(indexElement) - 1;
+					hasTexcoord = true;
+				}
 
-				std::getline(v, indexElement, '/');
-				size_t normalIndex = std::stoull(indexElement) - 1;
+				// 法線インデックスの取得
+				size_t normalIndex = 0;
+				bool hasNormal = false;
+				if (std::getline(v, indexElement, '/') && !indexElement.empty()) {
+					normalIndex = std::stoull(indexElement) - 1;
+					hasNormal = true;
+				}
 
-				VertexData vertex;
-				vertex.position = positions[positionIndex];
-				vertex.u = texcoords[texcoordIndex].x;
-				vertex.v = texcoords[texcoordIndex].y;
-				vertex.normal = normals[normalIndex];
+				VertexData vertex{};
+				// 位置情報のマッピング
+				if (positionIndex < positions.size()) {
+					vertex.position = positions[positionIndex];
+				}
 
+				// テクスチャ座標のマッピング (存在しない場合は0埋め)
+				if (hasTexcoord && texcoordIndex < texcoords.size()) {
+					vertex.u = texcoords[texcoordIndex].x;
+					vertex.v = texcoords[texcoordIndex].y;
+				}
+				else {
+					vertex.u = 0.0f;
+					vertex.v = 0.0f;
+				}
+
+				// 法線情報のマッピング (存在しない場合は正面を向けるなどデフォルト値を設定)
+				if (hasNormal && normalIndex < normals.size()) {
+					vertex.normal = normals[normalIndex];
+				}
+				else {
+					vertex.normal = Vector3{ 0.0f, 0.0f, -1.0f };
+				}
+
+				// 右手系から左手系への変換処理
 				vertex.position.x *= -1.0f;
 				vertex.normal.x *= -1.0f;
 
@@ -325,7 +367,12 @@ MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const st
 	MaterialData materialData;
 	std::string line;
 	std::ifstream file(directoryPath + "/" + fileName);
-	assert(file.is_open());
+
+	if (!file.is_open())
+	{
+		Log("Warning: Failed to open MTL file: " + directoryPath + "/" + fileName + "\n");
+		return materialData;
+	}
 
 	while (std::getline(file, line))
 	{
@@ -338,14 +385,13 @@ MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const st
 			std::string textureFileName;
 			s >> textureFileName;
 			materialData.textureFilePath = directoryPath + "/" + textureFileName;
-			break; // 1つのマテリアルにつき1つのテクスチャのみを想定
+			// 1つのマテリアルに複数の map_Kd があることは稀ですが、最初に見つかったものを優先して終了
+			break;
 		}
-		else if (identifier == "mtllib")
+		else if (identifier == "newmtl")
 		{
-			std::string materialFileName;
-			s >> materialFileName;
-
-			materialData = LoadMaterialTemplateFile(directoryPath, materialFileName);
+			// 本来はマテリアル名ごとに管理すべきですが、現状の実装仕様(1ファイル1マテリアル想定)を崩さない範囲で
+			// 複数マテリアル定義の先頭だけを取得する形に留めるか、必要に応じて拡張してください。
 		}
 	}
 	return materialData;
