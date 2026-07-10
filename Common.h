@@ -13,12 +13,15 @@
 #include <strsafe.h>
 #include <dxgidebug.h>
 #include <dxcapi.h>
+#include <xaudio2.h>
+#include <fstream>
 
 #include "ConvertString.h"
 #include "Matrix4x4.h"
 #include "ImguiCode.h"
 #include "externals/DirectXTex/DirectXTex.h"
 
+#pragma comment(lib, "xaudio2.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "Dbghelp.lib")

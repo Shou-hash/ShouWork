@@ -4,6 +4,7 @@
 #include <numbers>
 #include "ResourceObject.h"
 #include <wrl.h>
+#include "Sound.h"
 
 // DXGIファクトリーの実体定義
 IDXGIFactory7* dxgiFactory = nullptr;
@@ -15,6 +16,17 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	SetUnhandledExceptionFilter(ExportDump);
 
 	OutputDebugStringA("Hello, DirectX!\n");
+
+	// サウンドシステムの初期化
+	Sound* soundManager = Sound::GetInstance();
+	soundManager->Initialize();
+
+	// 音声ファイルの読み込み
+	// ※ 実行環境に合わせて、"Resources/Alarm.wav" などの実在するパスに書き換えてください
+	Sound::SoundData soundData = soundManager->SoundLoadWave("Resources/fanfare.wav");
+
+	// 音声の再生 (テスト再生)
+	soundManager->SoundPlayWave(soundData);
 
 #pragma region 文字列の出力(stringとwstringの相互変換)
 
@@ -709,6 +721,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 #endif
+
+	soundManager->SoundUnload(&soundData);
+	soundManager->Finalize();
 
 	CoUninitialize();
 	return 0;
