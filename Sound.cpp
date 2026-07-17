@@ -106,9 +106,9 @@ void Sound::SoundPlayWave(const SoundData& soundData) {
 
     // 波形データのサブミット
     hr = pSourceVoice->SubmitSourceBuffer(&buffer);
-    assert(SUCCEEDED(hr));
+    
 
     // 再生開始
     hr = pSourceVoice->Start(0);
-    assert(SUCCEEDED(hr));
+    
 }

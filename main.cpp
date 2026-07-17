@@ -10,6 +10,40 @@
 IDXGIFactory7* dxgiFactory = nullptr;
 Microsoft::WRL::ComPtr<ID3D12Device> device;
 
+// 追加：トリガー処理（キー入力判定関数群）
+
+// キーを押した状態か
+bool IsPushKey(uint8_t keyNumber, const BYTE* key) {
+	if (key[keyNumber]) {
+		return true;
+	}
+	return false;
+}
+
+// キーを離した状態か
+bool IsReleaseKey(uint8_t keyNumber, const BYTE* key) {
+	if (!key[keyNumber]) {
+		return true;
+	}
+	return false;
+}
+
+// キーを押した瞬間か
+bool IsTriggerKey(uint8_t keyNumber, const BYTE* key, const BYTE* keyPre) {
+	if (key[keyNumber] && !keyPre[keyNumber]) {
+		return true;
+	}
+	return false;
+}
+
+// キーを離した瞬間か
+bool IsExitKey(uint8_t keyNumber, const BYTE* key, const BYTE* keyPre) {
+	if (!key[keyNumber] && keyPre[keyNumber]) {
+		return true;
+	}
+	return false;
+}
+
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
 	CoInitializeEx(0, COINIT_MULTITHREADED);
@@ -154,6 +188,31 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
+	// 追加：DirectInputの初期化
+	// DirectInputの初期化
+	ResourceObject<IDirectInput8> directInput;
+	hr = DirectInput8Create(
+		hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
+		(void**)directInput.GetAddressOf(), nullptr); // GetAddressOf() で初期化
+	assert(SUCCEEDED(hr));
+
+	// キーボードデバイスをResourceObjectで管理
+	ResourceObject<IDirectInputDevice8> keyboard;
+	hr = directInput->CreateDevice(GUID_SysKeyboard, keyboard.GetAddressOf(), NULL);
+	assert(SUCCEEDED(hr));
+
+	// 入力データ形式のセット (operator-> を経由してメソッドを呼び出す)
+	hr = keyboard->SetDataFormat(&c_dfDIKeyboard);
+	assert(SUCCEEDED(hr));
+
+	// 排他制御レベルのセット
+	hr = keyboard->SetCooperativeLevel(
+		hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
+	assert(SUCCEEDED(hr));
+
+	BYTE key[256] = {};     // 現在のフレームのキー状態
+	BYTE keyPre[256] = {};  // 1フレーム前のキー状態
+
 #ifdef _DEBUG
 
 	ID3D12InfoQueue* infoQueue = nullptr;
@@ -209,7 +268,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	ID3D12DescriptorHeap* rtvDescriptorHeap = nullptr;
 	rtvDescriptorHeap = CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2, false);
 
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap = 
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap =
 		CreateDescriptorHeap(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
 
 	ID3D12Resource* swapChainResources[2] = { nullptr };
@@ -562,6 +621,34 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		}
 		else
 		{
+
+			// 追加：更新処理 (毎フレーム行う)
+			// キーボード情報の取得開始
+			std::memcpy(keyPre, key, sizeof(key));
+
+			// キーボード情報の取得開始
+			keyboard->Acquire();
+
+			// 全キーの入力状態を取得する
+			keyboard->GetDeviceState(sizeof(key), key);
+
+			// ==========================================
+			// 使い方サンプル
+			// ==========================================
+			// スペースキー（DIK_SPACE）を押した「瞬間」だけ処理を通す
+			if (IsTriggerKey(DIK_SPACE, key, keyPre))
+			{
+				OutputDebugStringA("Space Triggered!\n");
+			}
+
+			// 0キー（DIK_0）を押している「間」ずっと処理を通す
+			if (IsPushKey(DIK_0, key))
+			{
+				OutputDebugStringA("Hit 0\n");
+			}
+
+			// ==========================================
+
 			ImGui_ImplDX12_NewFrame();
 			ImGui_ImplWin32_NewFrame();
 			ImGui::NewFrame();
@@ -721,6 +808,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 #endif
+
+	if (keyboard) {
+		keyboard->Unacquire(); // 占有状態を解除
+	}
 
 	soundManager->SoundUnload(&soundData);
 	soundManager->Finalize();
