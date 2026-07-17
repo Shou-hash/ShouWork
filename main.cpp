@@ -5,10 +5,15 @@
 #include "ResourceObject.h"
 #include <wrl.h>
 #include "Sound.h"
+#include "DebugCamera.h"
+#pragma comment(lib, "dxgi.lib")
 
 // DXGIファクトリーの実体定義
 IDXGIFactory7* dxgiFactory = nullptr;
 Microsoft::WRL::ComPtr<ID3D12Device> device;
+
+BYTE key[256] = {};     // 現在のフレームのキー状態
+BYTE keyPre[256] = {};  // 1フレーム前のキー状態
 
 // 追加：トリガー処理（キー入力判定関数群）
 
@@ -175,12 +180,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	wvpData->World = MakeIdentity4x4();
 
 	struct Transform transform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
-	struct Transform cameraTransform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f} };
+
+	// デバッグカメラの生成と初期化
+	DebugCamera debugCamera;
+	debugCamera.Initialize();
 
 	Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
-	Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
-	Matrix4x4 viewMatrix = Inverse(cameraMatrix);
-	Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
+	Matrix4x4 viewMatrix = debugCamera.GetViewMatrix();
+	Matrix4x4 projectionMatrix = debugCamera.GetProjectionMatrix();
 
 	Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
 	wvpData->WVP = worldViewProjectionMatrix;
@@ -209,9 +216,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	hr = keyboard->SetCooperativeLevel(
 		hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
 	assert(SUCCEEDED(hr));
-
-	BYTE key[256] = {};     // 現在のフレームのキー状態
-	BYTE keyPre[256] = {};  // 1フレーム前のキー状態
 
 #ifdef _DEBUG
 
@@ -674,6 +678,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			transform.rotate.x = sphereRotate[0] * (std::numbers::pi_v<float> / 180.0f);
 			transform.rotate.y = sphereRotate[1] * (std::numbers::pi_v<float> / 180.0f);
 			transform.rotate.z = sphereRotate[2] * (std::numbers::pi_v<float> / 180.0f);
+
+			// デバッグカメラの更新
+			debugCamera.Update();
+			viewMatrix = debugCamera.GetViewMatrix();
+			projectionMatrix = debugCamera.GetProjectionMatrix();
 
 			// 行列の再計算と定数バッファへの転送
 			worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);

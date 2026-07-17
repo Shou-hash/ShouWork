@@ -26,3 +26,5 @@ Matrix4x4 MakeRotateXMatrix(float angle);
 Matrix4x4 MakeRotateYMatrix(float angle);
 Matrix4x4 MakeRotateZMatrix(float angle);
 Matrix4x4 MakeTranslateMatrix(const Vector3& translation);
+
+Vector3 TransformNormal(const Vector3& vector, const Matrix4x4& matrix);
