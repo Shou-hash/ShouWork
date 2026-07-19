@@ -389,6 +389,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 = CreateTextureResource(device, metadata2);
 	UploadTextureData(textureResource2.Get(), mipImages2);
 
+	// uvChecker.png をロードする
+	DirectX::ScratchImage uvCheckerImages = LoadTexture("Resources/uvChecker.png");
+	const DirectX::TexMetadata& uvCheckerMetadata = uvCheckerImages.GetMetadata();
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> uvCheckerResource = CreateTextureResource(device, uvCheckerMetadata);
+	UploadTextureData(uvCheckerResource.Get(), uvCheckerImages);
+
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = kClientWidth;
 	resourceDesc.Height = kClientHeight;
@@ -451,6 +458,18 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	textureSrvHandleCPU2.ptr += descriptorSize * 2;
 	textureSrvHandleGPU2.ptr += descriptorSize * 2;
 	device->CreateShaderResourceView(textureResource2.Get(), &srvDesc2, textureSrvHandleCPU2);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc3{};
+	srvDesc3.Format = uvCheckerMetadata.format;
+	srvDesc3.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc3.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc3.Texture2D.MipLevels = UINT(uvCheckerMetadata.mipLevels);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandleCPU3 = srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU3 = srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	textureSrvHandleCPU3.ptr += descriptorSize * 4; // インデックス 4 に配置
+	textureSrvHandleGPU3.ptr += descriptorSize * 4;
+	device->CreateShaderResourceView(uvCheckerResource.Get(), &srvDesc3, textureSrvHandleCPU3);
 
 #ifdef USE_IMGUI
 
@@ -607,6 +626,137 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma region 描画数値
 
+	// UV Transform 用の各種パラメータ (ImGui制御用)
+	Vector3 uvScale = { 1.0f, 1.0f, 1.0f };
+	Vector3 uvRotate = { 0.0f, 0.0f, 0.0f }; // ラジアン
+	Vector3 uvTranslate = { 0.0f, 0.0f, 0.0f };
+
+	// ImGuiのUIで度数法を扱うためのバッファ
+	float uiUVScale[2] = { 1.0f, 1.0f };
+	float uiUVRotate = 0.0f; // 度数法 (Degree)
+	float uiUVTranslate[2] = { 0.0f, 0.0f };
+
+	// Sprite 用の UV パラメータと変数
+	Vector3 spriteUVScale = { 1.0f, 1.0f, 1.0f };
+	Vector3 spriteUVRotate = { 0.0f, 0.0f, 0.0f };
+	Vector3 spriteUVTranslate = { 0.0f, 0.0f, 0.0f };
+
+	float uiSpriteUVScale[2] = { 1.0f, 1.0f };
+	float uiSpriteUVRotate = 0.0f;
+	float uiSpriteUVTranslate[2] = { 0.0f, 0.0f };
+
+	// ImGui用のPositionバッファ（初期値 X: 0, Y: 0）
+	float uiSpritePosition[2] = { 320.0f, 180.0f };
+	float uiSpriteSize[2] = { 320.0f, 180.0f };
+
+	// Sprite 用のマテリアル定数バッファの作成
+	ID3D12Resource* spriteMaterialResource = CreateBufferResource(device, sizeof(Material));
+	Material* spriteMaterialData = nullptr;
+	spriteMaterialResource->Map(0, nullptr, reinterpret_cast<void**>(&spriteMaterialData));
+	spriteMaterialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+	spriteMaterialData->enableLighting = 0; // スプライトなのでライティングは無効化
+	spriteMaterialData->uvTransform = MakeIdentity4x4();
+
+	// Sprite 用の WVP 行列定数バッファの作成
+	ID3D12Resource* spriteWvpResource = CreateBufferResource(device, sizeof(TransformationMatrix));
+	TransformationMatrix* spriteWvpData = nullptr;
+	spriteWvpResource->Map(0, nullptr, reinterpret_cast<void**>(&spriteWvpData));
+
+	// 左上に表示するためのスプライト用トランスフォーム行列の計算
+	// 例として、中央モデルよりもサイズを小さくし、左上に移動させた行列を設定します
+	struct Transform spriteTransform = {
+		{ 300.0f, 300.0f, 1.0f },   // スケール（ピクセル単位の幅・高さ）
+		{ 0.0f, 0.0f, 0.0f },
+		{ 100.0f, 100.0f, 0.0f }    // 位置（左上からのピクセル座標）
+	};
+
+	Matrix4x4 spriteWorldMatrix = MakeAffineMatrix(spriteTransform.scale, spriteTransform.rotate, spriteTransform.translate);
+
+	// スプライトはカメラの移動に影響されないように、ビュー行列は単位行列(MakeIdentity4x4)にするか、
+	// あるいは通常のビュー投影行列を掛けて3D空間の左上に配置します。ここでは2D的な配置としてビューを単位行列にします。
+	Matrix4x4 identityMatrix = MakeIdentity4x4();
+	spriteWvpData->WVP = Multiply(spriteWorldMatrix, Multiply(identityMatrix, identityMatrix));
+	spriteWvpData->World = spriteWorldMatrix;
+
+	const uint32_t kSubdivision = 16; // 球の分割数
+
+	// === 【追加】各オブジェクトの表示・非表示フラグ ===
+	bool showModel = true;
+	bool showSprite = true;
+	bool showSphere = true;
+
+	// === 【追加】球用のテクスチャ選択変数 (0: uvChecker, 1: MonsterBall, 2: Model Texture) ===
+	static int sphereTextureIndex = 0;
+
+	// === 【追加】球用のトランスフォーム・UVパラメータ変数 ===
+	struct Transform sphereTransform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+	Vector3 sphereUVScale = { 1.0f, 1.0f, 1.0f };
+	Vector3 sphereUVRotate = { 0.0f, 0.0f, 0.0f };
+	Vector3 sphereUVTranslate = { 0.0f, 0.0f, 0.0f };
+
+	float uiSphereUVScale[2] = { 1.0f, 1.0f };
+	float uiSphereUVRotate = 0.0f;
+	float uiSphereUVTranslate[2] = { 0.0f, 0.0f };
+
+	// === 【追加】球の頂点データ生成アルゴリズム ===
+	std::vector<VertexData> sphereVertices;
+	for (uint32_t lat = 0; lat < kSubdivision; ++lat) {
+		float lat0 = std::numbers::pi_v<float> *(-0.5f + (float)lat / kSubdivision);
+		float lat1 = std::numbers::pi_v<float> *(-0.5f + (float)(lat + 1) / kSubdivision);
+		for (uint32_t lon = 0; lon < kSubdivision; ++lon) {
+			float lon0 = 2.0f * std::numbers::pi_v<float> *(float)lon / kSubdivision;
+			float lon1 = 2.0f * std::numbers::pi_v<float> *(float)(lon + 1) / kSubdivision;
+
+			// 補助関数的に4つの頂点を計算
+			auto GetSphereVertex = [](float lat, float lon) -> VertexData {
+				VertexData v;
+				v.position.x = std::cos(lat) * std::cos(lon);
+				v.position.y = std::sin(lat);
+				v.position.z = std::cos(lat) * std::sin(lon);
+				v.position.w = 1.0f;
+				v.normal = { v.position.x, v.position.y, v.position.z };
+				v.u = lon / (2.0f * std::numbers::pi_v<float>);
+				v.v = 1.0f - (lat / std::numbers::pi_v<float> +0.5f);
+				return v;
+				};
+
+			VertexData v0 = GetSphereVertex(lat0, lon0);
+			VertexData v1 = GetSphereVertex(lat1, lon0);
+			VertexData v2 = GetSphereVertex(lat0, lon1);
+			VertexData v3 = GetSphereVertex(lat1, lon1);
+
+			// 三角形1
+			sphereVertices.push_back(v0); sphereVertices.push_back(v1); sphereVertices.push_back(v2);
+			// 三角形2
+			sphereVertices.push_back(v1); sphereVertices.push_back(v3); sphereVertices.push_back(v2);
+		}
+	}
+
+	// === 【追加】球用の各種GPUリソースの作成とマッピング ===
+	ID3D12Resource* sphereVertexResource = CreateBufferResource(device, sizeof(VertexData) * sphereVertices.size());
+	D3D12_VERTEX_BUFFER_VIEW sphereVertexBufferView{};
+	sphereVertexBufferView.BufferLocation = sphereVertexResource->GetGPUVirtualAddress();
+	sphereVertexBufferView.SizeInBytes = static_cast<UINT>(sizeof(VertexData) * sphereVertices.size());
+	sphereVertexBufferView.StrideInBytes = sizeof(VertexData);
+
+	VertexData* sphereVertexData = nullptr;
+	sphereVertexResource->Map(0, nullptr, reinterpret_cast<void**>(&sphereVertexData));
+	std::memcpy(sphereVertexData, sphereVertices.data(), sizeof(VertexData) * sphereVertices.size());
+
+	ID3D12Resource* sphereMaterialResource = CreateBufferResource(device, sizeof(Material));
+	Material* sphereMaterialData = nullptr;
+	sphereMaterialResource->Map(0, nullptr, reinterpret_cast<void**>(&sphereMaterialData));
+	sphereMaterialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+	sphereMaterialData->enableLighting = 1;
+	sphereMaterialData->uvTransform = MakeIdentity4x4();
+
+	ID3D12Resource* sphereWvpResource = CreateBufferResource(device, sizeof(TransformationMatrix));
+	TransformationMatrix* sphereWvpData = nullptr;
+	sphereWvpResource->Map(0, nullptr, reinterpret_cast<void**>(&sphereWvpData));
+
+	materialData->enableLighting = 2;       // 初期値をHalf Lambertに
+	sphereMaterialData->enableLighting = 2; // 初期値をHalf Lambertに
+
 #pragma endregion
 
 	bool useMonsterBall = true;
@@ -636,9 +786,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			// 全キーの入力状態を取得する
 			keyboard->GetDeviceState(sizeof(key), key);
 
-			// ==========================================
 			// 使い方サンプル
-			// ==========================================
 			// スペースキー（DIK_SPACE）を押した「瞬間」だけ処理を通す
 			if (IsTriggerKey(DIK_SPACE, key, keyPre))
 			{
@@ -657,22 +805,58 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			ImGui_ImplWin32_NewFrame();
 			ImGui::NewFrame();
 
+			// Sprite用テクスチャ選択のラジオボタン化 (0: uvChecker, 1: MonsterBall)
+			static int spriteTextureIndex = 0; // 0: uvChecker, 1: MonsterBall, 2: plane元のテクスチャ
+			
+			// === 【修正・追加】各オブジェクトの表示チェックボックスとテクスチャ選択の分離 ===
+			ImGui::Begin("Texture Settings");
 			ImGui::Checkbox("use MonsterBall Texture", &useMonsterBall);
-			ImGui::Checkbox("use Sprite MonsterBall Texture", &useSpriteMonsterBall);
+			ImGui::Checkbox("Show Central Model", &showModel);
+			ImGui::Checkbox("Show Sprite", &showSprite);
+			ImGui::Checkbox("Show Sphere", &showSphere);
+
+			// 中央モデル用テクスチャ
+			ImGui::Checkbox("Model: use MonsterBall Texture", &useMonsterBall);
+
+			ImGui::Separator();
+			// Sprite用テクスチャ選択 (完全に独立)
+			ImGui::Text("Sprite Texture Select:");
+			ImGui::RadioButton("Sprite: uvChecker", &spriteTextureIndex, 0); ImGui::SameLine();
+			ImGui::RadioButton("Sprite: MonsterBall", &spriteTextureIndex, 1); ImGui::SameLine();
+			ImGui::RadioButton("Sprite: Model Texture", &spriteTextureIndex, 2);
+
+			ImGui::Separator();
+			// 球用テクスチャ選択 (完全に独立)
+			ImGui::Text("Sphere Texture Select:");
+			ImGui::RadioButton("Sphere: uvChecker", &sphereTextureIndex, 0); ImGui::SameLine();
+			ImGui::RadioButton("Sphere: MonsterBall", &sphereTextureIndex, 1); ImGui::SameLine();
+			ImGui::RadioButton("Sphere: Model Texture", &sphereTextureIndex, 2);
+			
+			ImGui::End();
 
 			ImGui::Begin("Lighting Settings");
+
 			ImGui::ColorEdit4("Material Color", &materialData->color.x);
-			ImGui::Checkbox("Enable Lighting", reinterpret_cast<bool*>(&materialData->enableLighting));
+
+			// 現在の選択状態（0: なし, 1: Lambert, 2: Half Lambert）
+			// ※ sphereMaterialDataと連動させるため、現在の状態をローカル変数に受ける
+			int currentLightingType = materialData->enableLighting;
+			const char* lightingItems[] = { "None", "Lambert", "Half Lambert" };
+
+			if (ImGui::Combo("Lighting", &currentLightingType, lightingItems, static_cast<int>(std::size(lightingItems))))
+			{
+				// 選択が変わったらマテリアルに適用
+				materialData->enableLighting = currentLightingType;
+				sphereMaterialData->enableLighting = currentLightingType;
+			}
+
 			ImGui::Separator();
 			ImGui::ColorEdit4("Light Color", &directionalLightData->color.x);
 
 			ImGui::SliderFloat3("Light Direction", uiLightDirection, -1.0f, 1.0f);
 			ImGui::SliderFloat("Light Intensity", &directionalLightData->intensity, 0.0f, 5.0f);
 
-			ImGui::Separator();
-			ImGui::Text("Model Transform");
-			// 0〜360度で動かせるスライダー (SphereRotateX, Y, Z)
-			ImGui::SliderFloat3("Sphere Rotate", sphereRotate, 0.0f, 360.0f);
+			ImGui::End();
 
 			// スライダーの度数法（Degree）をラジアン（Radian）に変換して構造体に適用
 			transform.rotate.x = sphereRotate[0] * (std::numbers::pi_v<float> / 180.0f);
@@ -690,6 +874,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			wvpData->WVP = worldViewProjectionMatrix;
 			wvpData->World = worldMatrix;
 
+			// Sprite（左上モデル）の行列も毎フレーム再計算してバッファへ送る
+			spriteWorldMatrix = MakeAffineMatrix(spriteTransform.scale, spriteTransform.rotate, spriteTransform.translate);
+
+			// 2D用のビュー行列（カメラが動いてもSpriteが固定されるように単位行列にする）
+			Matrix4x4 sprite2DViewMatrix = MakeIdentity4x4();
+
+			// 1280 * 720 のスクリーンサイズに合わせた正射影行列を作成（main1.cppの仕組みを応用）
+			// ※ Y軸は上が0、下が720となるように orthoTop=0.0f, orthoBottom=720.0f に設定
+			Matrix4x4 sprite2DProjectionMatrix = MakeOrthographicMatrix(0.0f, 1280.0f, 0.0f, 720.0f, 0.0f, 100.0f);
+
+			// 行列の合成
+			Matrix4x4 spriteWVPMatrix = Multiply(spriteWorldMatrix, Multiply(sprite2DViewMatrix, sprite2DProjectionMatrix));
+
+			spriteWvpData->WVP = spriteWVPMatrix;
+			spriteWvpData->World = spriteWorldMatrix;
+
 			float length = std::sqrt(uiLightDirection[0] * uiLightDirection[0] +
 				uiLightDirection[1] * uiLightDirection[1] +
 				uiLightDirection[2] * uiLightDirection[2]);
@@ -703,6 +903,80 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			{
 				directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
 			}
+
+			ImGui::Begin("Display Settings");
+
+			ImGui::Separator();
+			ImGui::Text("Model Transform");
+			// 0〜360度で動かせるスライダー (SphereRotateX, Y, Z)
+			ImGui::SliderFloat3("Sphere Rotate", sphereRotate, 0.0f, 360.0f);
+			ImGui::Text("--- Central Model UV ---");
+			ImGui::SliderFloat2("Model UV Scale", uiUVScale, 0.1f, 10.0f);
+			ImGui::SliderFloat("Model UV Rotate", &uiUVRotate, -360.0f, 360.0f);
+			ImGui::SliderFloat2("Model UV Translate", uiUVTranslate, -5.0f, 5.0f);
+
+			// UIの値を内部変数に適用
+			uvScale.x = uiUVScale[0];
+			uvScale.y = uiUVScale[1];
+			uvRotate.z = uiUVRotate * (std::numbers::pi_v<float> / 180.0f); // 度数法からラジアンへ変換
+			uvTranslate.x = uiUVTranslate[0];
+			uvTranslate.y = uiUVTranslate[1];
+
+			// UVトランスフォーム行列の計算と定数バッファへの書き込み
+			materialData->uvTransform = MakeUVTransformMatrix(uvScale, uvRotate, uvTranslate);
+
+
+			// 2つ目のモデル (左上 Sprite) の UV 制御
+			ImGui::Separator();
+			ImGui::Text("Sprite UV");
+			ImGui::SliderFloat2("Sprite UV Scale", uiSpriteUVScale, 0.1f, 10.0f);
+			ImGui::SliderFloat("Sprite UV Rotate", &uiSpriteUVRotate, -360.0f, 360.0f);
+			ImGui::SliderFloat2("Sprite UV Translate", uiSpriteUVTranslate, -5.0f, 5.0f);
+
+			spriteUVScale.x = uiSpriteUVScale[0];
+			spriteUVScale.y = uiSpriteUVScale[1];
+			spriteUVRotate.z = uiSpriteUVRotate * (std::numbers::pi_v<float> / 180.0f);
+			spriteUVTranslate.x = uiSpriteUVTranslate[0];
+			spriteUVTranslate.y = uiSpriteUVTranslate[1];
+			spriteMaterialData->uvTransform = MakeUVTransformMatrix(spriteUVScale, spriteUVRotate, spriteUVTranslate);
+
+			ImGui::Separator();
+			ImGui::Text("Sprite Screen Position");
+			ImGui::SliderFloat2("Position (Pixel)", uiSpritePosition, 0.0f, 1280.0f);
+
+			// UIの値をトランスフォーム構造体に適用
+			spriteTransform.translate.x = uiSpritePosition[0];
+			spriteTransform.translate.y = uiSpritePosition[1];
+
+			// ★追加：ピクセル単位でSpriteのサイズ（横幅・縦幅）を動かすUI
+			ImGui::Text("Sprite Screen Size");
+			ImGui::SliderFloat2("Size (Pixel)", uiSpriteSize, 1.0f, 1280.0f);
+
+			// UIの値をトランスフォーム構造体のスケールに適用
+			spriteTransform.scale.x = uiSpriteSize[0];
+			spriteTransform.scale.y = uiSpriteSize[1];
+
+			ImGui::Separator();
+			ImGui::Text("Sphere Transform & UV");
+			ImGui::SliderFloat3("Sphere Scale", &sphereTransform.scale.x, 0.1f, 10.0f);
+			ImGui::SliderFloat3("Sphere Translate", &sphereTransform.translate.x, -10.0f, 10.0f);
+			ImGui::SliderFloat2("Sphere UV Scale", uiSphereUVScale, 0.1f, 10.0f);
+			ImGui::SliderFloat("Sphere UV Rotate", &uiSphereUVRotate, -360.0f, 360.0f);
+			ImGui::SliderFloat2("Sphere UV Translate", uiSphereUVTranslate, -5.0f, 5.0f);
+
+			// 球のワールド行列再計算 (カメラビュー適用)
+			Matrix4x4 sphereWorldMatrix = MakeAffineMatrix(sphereTransform.scale, sphereTransform.rotate, sphereTransform.translate);
+			Matrix4x4 sphereWVPMatrix = Multiply(sphereWorldMatrix, Multiply(viewMatrix, projectionMatrix));
+			sphereWvpData->WVP = sphereWVPMatrix;
+			sphereWvpData->World = sphereWorldMatrix;
+
+			// 球用の独立したUVトランスフォームの適用
+			sphereUVScale.x = uiSphereUVScale[0];
+			sphereUVScale.y = uiSphereUVScale[1];
+			sphereUVRotate.z = uiSphereUVRotate * (std::numbers::pi_v<float> / 180.0f);
+			sphereUVTranslate.x = uiSphereUVTranslate[0];
+			sphereUVTranslate.y = uiSphereUVTranslate[1];
+			sphereMaterialData->uvTransform = MakeUVTransformMatrix(sphereUVScale, sphereUVRotate, sphereUVTranslate);
 
 			ImGui::End();
 
@@ -749,26 +1023,72 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			commandList->SetPipelineState(graphicsPipelineState);
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+			// メインループ内 描画コマンド
+
 			D3D12_GPU_DESCRIPTOR_HANDLE currentTextureHandle = useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU1;
-			D3D12_GPU_DESCRIPTOR_HANDLE currentSpriteTextureHandle = useSpriteMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU1;
+
+			// Sprite用のテクスチャハンドルを判定 (初期状態の 0 なら新しく読み込んだ textureSrvHandleGPU3 = uvChecker を使用)
+			D3D12_GPU_DESCRIPTOR_HANDLE currentSpriteTextureHandle = textureSrvHandleGPU3; // デフォルト uvChecker
+			if (spriteTextureIndex == 1) {
+				currentSpriteTextureHandle = textureSrvHandleGPU2; // MonsterBall
+			}
+			else if (spriteTextureIndex == 2) {
+				currentSpriteTextureHandle = textureSrvHandleGPU1; // Model Texture
+			}
 
 			// 頂点バッファのセット
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 
-			// ルートパラメータへのリソースバインド
-			// RootParameter Index [0]: マテリアル (ピクセルシェーダー用 b0)
-			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+			// --- 1. 中央モデルの描画 ---
+			if (showModel)
+			{
+				D3D12_GPU_DESCRIPTOR_HANDLE currentTextureHandle = useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU1;
+				commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootConstantBufferView(2, wvpResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootDescriptorTable(3, currentTextureHandle);
+				commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+				commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0, 0);
+			}
 
-			// RootParameter Index [1]: 平行光源 (ピクセルシェーダー用 b1)
-			commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
+			// --- 2. 球（Sphere）の描画 ---
+			if (showSphere)
+			{
+				// 球用のテクスチャハンドル判定
+				D3D12_GPU_DESCRIPTOR_HANDLE currentSphereTextureHandle = textureSrvHandleGPU3; // デフォルト uvChecker
+				if (sphereTextureIndex == 1) {
+					currentSphereTextureHandle = textureSrvHandleGPU2; // MonsterBall
+				}
+				else if (sphereTextureIndex == 2) {
+					currentSphereTextureHandle = textureSrvHandleGPU1; // Model Texture
+				}
 
-			// RootParameter Index [2]: WVP行列 (頂点シェーダー用 b0)  ←これがエラーの直接原因
-			commandList->SetGraphicsRootConstantBufferView(2, wvpResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootConstantBufferView(0, sphereMaterialResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootConstantBufferView(2, sphereWvpResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootDescriptorTable(3, currentSphereTextureHandle);
+				commandList->IASetVertexBuffers(0, 1, &sphereVertexBufferView); // 球の頂点バッファをセット
+				commandList->DrawInstanced(UINT(sphereVertices.size()), 1, 0, 0);
+			}
 
-			// RootParameter Index [3]: テクスチャディスクリプタテーブル (ピクセルシェーダー用 t0)
-			commandList->SetGraphicsRootDescriptorTable(3, currentTextureHandle);
+			// --- 3. Sprite の描画 ---
+			if (showSprite)
+			{
+				D3D12_GPU_DESCRIPTOR_HANDLE currentSpriteTextureHandle = textureSrvHandleGPU3; // デフォルト uvChecker
+				if (spriteTextureIndex == 1) {
+					currentSpriteTextureHandle = textureSrvHandleGPU2; // MonsterBall
+				}
+				else if (spriteTextureIndex == 2) {
+					currentSpriteTextureHandle = textureSrvHandleGPU1; // Model Texture
+				}
 
-			commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0, 0);
+				commandList->SetGraphicsRootConstantBufferView(0, spriteMaterialResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootConstantBufferView(2, spriteWvpResource->GetGPUVirtualAddress());
+				commandList->SetGraphicsRootDescriptorTable(3, currentSpriteTextureHandle);
+				commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+				commandList->DrawInstanced(UINT(modelData.vertices.size()), 1, 0, 0);
+			}
 
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 

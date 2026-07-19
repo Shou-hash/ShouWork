@@ -30,25 +30,28 @@ PixelShaderOutput main(VertexShaderOutput input)
     // 変換後のUV座標（xy）を使ってテクスチャをサンプリング
     float32_t4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
     
-    // ライティングの有効・無効による分岐
-    if (gMaterial.enableLighting != 0)
+    // === Lighting方式の分岐 ===
+    if (gMaterial.enableLighting == 1) // Lambert
     {
-        // 光の向きを逆転させ、法線との内積をとる
+        float32_t NdotL = dot(normalize(input.normal), -normalize(gDirectionalLight.direction));
+        float32_t lambert = max(NdotL, 0.0f);
+        
+        output.color = gMaterial.color * textureColor * gDirectionalLight.color * lambert * gDirectionalLight.intensity;
+    }
+    else if (gMaterial.enableLighting == 2) // Half Lambert
+    {
         float32_t NdotL = dot(normalize(input.normal), -normalize(gDirectionalLight.direction));
         float32_t halfLambert = pow(NdotL * 0.5f + 0.5f, 2.0f);
         
-        // 輝度と色を補正して最終カラーを計算
-        float32_t4 diffuse = gMaterial.color * textureColor * gDirectionalLight.color * halfLambert * gDirectionalLight.intensity;
-        output.color = diffuse;
+        output.color = gMaterial.color * textureColor * gDirectionalLight.color * halfLambert * gDirectionalLight.intensity;
     }
-    else
+    else // 0: Lighting なし
     {
-        // ライティングが無効な場合は、素材の色とテクスチャの色を掛け合わせるのみ
         output.color = gMaterial.color * textureColor;
     }
     
     // アルファ値が0の場合は描画をスキップ
-    if (output.color.a == 0.0f)
+    if (textureColor.a == 0.0f)
     {
         discard;
     }
