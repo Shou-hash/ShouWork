@@ -787,6 +787,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		}
 		else
 		{
+			bool isDebugCamera = false;
+
+			// 例えば「TABキー」で切り替え
+			if (IsTriggerKey(DIK_TAB, key, keyPre)) {
+				isDebugCamera = !isDebugCamera;
+			}
+
+			if (isDebugCamera) {
+				debugCamera.Update();
+				viewMatrix = debugCamera.GetViewMatrix();
+				projectionMatrix = debugCamera.GetProjectionMatrix();
+			}
+			else {
+				// 通常のゲーム用カメラ行列の更新処理
+			}
+
 			gamePad.Update();
 
 			// Aボタンを押した瞬間の処理
