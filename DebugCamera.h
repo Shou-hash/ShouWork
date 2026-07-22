@@ -17,16 +17,16 @@ public:
     /// </summary>
     void Update();
 
-    // --- ゲッターの追加 ---
+    // ゲッター
     const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }
     const Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }
 
 private:
+    // X, Y, Z軸回りのローカル回転角
+    Vector3 rotation_ = { 0.0f, 0.0f, 0.0f };
+
     // ローカル座標
     Vector3 translation_ = { 0.0f, 0.0f, -50.0f };
-
-    // 累積回転行列 (オイラー角管理から移行)
-    Matrix4x4 matRot_;
 
     // ビュー行列
     Matrix4x4 viewMatrix_;
