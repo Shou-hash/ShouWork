@@ -6,6 +6,7 @@
 #include <wrl.h>
 #include "Sound.h"
 #include "DebugCamera.h"
+#include "DirectInput.h"
 #pragma comment(lib, "dxgi.lib")
 
 // DXGIファクトリーの実体定義
@@ -69,6 +70,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	Sound::SoundData soundData = soundManager->SoundLoadWave("Resources/fanfare.wav");
 	soundManager->SoundPlayWave(soundData);
+
+	DirectInput gamePad;
 
 #pragma region 文字列の出力(stringとwstringの相互変換)
 
@@ -434,10 +437,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	std::vector<ModelEntry> modelEntries = {
 	{ "planeOBJ",         "Resources",              "plane.obj" },
 	{ "multiMaterialOBJ", "Resources/multiMaterial", "multiMaterial.obj" },
-	{ "multiMeshOBJ",     "Resources/multiMesh",     "multiMesh.obj" }, // フォルダがある場合
+	{ "multiMeshOBJ",     "Resources/multiMesh",     "multiMesh.obj" },
 	{ "teapotOBJ",        "Resources/teapot",        "teapot.obj" },
 	{ "bunnyOBJ",         "Resources/bunny",         "bunny.obj" },
-	{ "suzanneOBJ",       "Resources/suzanne",       "suzanne.obj" }  // ← ここを修正！
+	{ "suzanneOBJ",       "Resources/suzanne",       "suzanne.obj" }
 	};
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> loadedTextureResources;
@@ -784,13 +787,25 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 		}
 		else
 		{
+			gamePad.Update();
+
+			// Aボタンを押した瞬間の処理
+			if (gamePad.IsTrigger(XINPUT_GAMEPAD_A)) {
+				OutputDebugStringA("A Button Pressed\n");
+			}
+
+			// 左スティックでオブジェクトを移動
+			Vector2 lStick = gamePad.GetLeftStick();
+			transform.translate.x += lStick.x * 0.1f;
+			transform.translate.y += lStick.y * 0.1f;
+
 			std::memcpy(keyPre, key, sizeof(key));
 			keyboard->Acquire();
 			keyboard->GetDeviceState(sizeof(key), key);
 
 			if (IsTriggerKey(DIK_SPACE, key, keyPre))
 			{
-				OutputDebugStringA("Space Triggered!\n");
+				OutputDebugStringA("Space Triggered\n");
 			}
 
 			if (IsPushKey(DIK_0, key))
