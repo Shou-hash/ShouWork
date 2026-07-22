@@ -239,12 +239,14 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 
 	std::ifstream file(directoryPath + "/" + fileName); // ファイルを開く
 
-	// ファイルオープン失敗時のエラーログと安全な早期リターン
 	if (!file.is_open())
 	{
 		Log("Error: Failed to open OBJ file: " + directoryPath + "/" + fileName + "\n");
 		return modelData;
 	}
+
+	MeshData currentMesh;
+	std::string currentMtlFile = "";
 
 	while (std::getline(file, line))
 	{
@@ -254,14 +256,20 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 
 		if (identifier == "mtllib")
 		{
-			std::string materialFileName;
-			s >> materialFileName;
-			// 既存のマテリアル情報を上書きせず、必要に応じてマテリアルファイルを読み込む
-			// （複数mtllibがある場合は、新しいテクスチャパスがあれば更新する方針）
-			MaterialData tempMaterial = LoadMaterialTemplateFile(directoryPath, materialFileName);
-			if (!tempMaterial.textureFilePath.empty())
+			s >> currentMtlFile;
+		}
+		else if (identifier == "usemtl")
+		{
+			if (!currentMesh.vertices.empty())
 			{
-				modelData.material.textureFilePath = tempMaterial.textureFilePath;
+				modelData.meshes.push_back(currentMesh);
+				currentMesh = MeshData();
+			}
+			std::string materialName;
+			s >> materialName;
+			if (!currentMtlFile.empty())
+			{
+				currentMesh.material = LoadMaterialTemplateFile(directoryPath, currentMtlFile);
 			}
 		}
 		// 頂点位置
@@ -353,10 +361,15 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 				triangle[faceVertex] = vertex;
 			}
 
-			modelData.vertices.push_back(triangle[2]);
-			modelData.vertices.push_back(triangle[1]);
-			modelData.vertices.push_back(triangle[0]);
+			currentMesh.vertices.push_back(triangle[2]);
+			currentMesh.vertices.push_back(triangle[1]);
+			currentMesh.vertices.push_back(triangle[0]);
 		}
+	}
+
+	if (!currentMesh.vertices.empty())
+	{
+		modelData.meshes.push_back(currentMesh);
 	}
 
 	return modelData;
@@ -385,13 +398,7 @@ MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const st
 			std::string textureFileName;
 			s >> textureFileName;
 			materialData.textureFilePath = directoryPath + "/" + textureFileName;
-			// 1つのマテリアルに複数の map_Kd があることは稀ですが、最初に見つかったものを優先して終了
 			break;
-		}
-		else if (identifier == "newmtl")
-		{
-			// 本来はマテリアル名ごとに管理すべきですが、現状の実装仕様(1ファイル1マテリアル想定)を崩さない範囲で
-			// 複数マテリアル定義の先頭だけを取得する形に留めるか、必要に応じて拡張してください。
 		}
 	}
 	return materialData;

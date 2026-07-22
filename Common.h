@@ -89,10 +89,17 @@ struct MaterialData {
 	std::string textureFilePath;
 };
 
+struct MeshData
+{
+	std::vector<VertexData> vertices;
+	MaterialData material;
+};
+
 struct ModelData
 {
 	std::vector<VertexData> vertices;
 	MaterialData material;
+	std::vector<MeshData> meshes;
 };
 
 // DXGIファクトリー (実体はmain.cpp)
