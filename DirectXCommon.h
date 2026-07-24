@@ -32,9 +32,6 @@ DirectX::ScratchImage LoadTexture(const std::string& filePath);
 // テクスチャリソースの作成
 ID3D12Resource* CreateTextureResource(ID3D12Device* device, const DirectX::TexMetadata& metadata);
 
-// テクスチャデータのアップロード
-void UploadTextureData(ID3D12Resource* texture, const DirectX::ScratchImage& mipImages);
-
 ID3D12Resource* CreateDepthStenciTextureResource(ID3D12Device* device, int32_t width, int32_t height);
 
 #pragma endregion
@@ -46,3 +43,5 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descrip
 ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileName);
 
 MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& fileName);
+
+ID3D12Resource* UploadTextureData(ID3D12Resource* texture, const DirectX::ScratchImage& mipImages, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);

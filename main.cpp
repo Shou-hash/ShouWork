@@ -11,7 +11,7 @@
 
 // DXGIファクトリーの実体定義
 IDXGIFactory7* dxgiFactory = nullptr;
-Microsoft::WRL::ComPtr<ID3D12Device> device;
+ID3D12Device* device = nullptr;
 
 BYTE key[256] = {};     // 現在のフレームのキー状態
 BYTE keyPre[256] = {};  // 1フレーム前のキー状態
@@ -155,7 +155,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	}
 	assert(useAdapter != nullptr);
 
-	ID3D12Device* device = nullptr;
+	device = nullptr;
 	D3D_FEATURE_LEVEL featureLevels[] = {
 		D3D_FEATURE_LEVEL_12_2,
 		D3D_FEATURE_LEVEL_12_1,
@@ -363,7 +363,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	DirectX::ScratchImage mipImages2 = LoadTexture("Resources/monsterBall.png");
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 = CreateTextureResource(device, mipImages2.GetMetadata());
-	UploadTextureData(textureResource2.Get(), mipImages2);
+	UploadTextureData(textureResource2.Get(), mipImages2, device, commandList);
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter);
 	{
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -376,7 +376,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	DirectX::ScratchImage uvCheckerImages = LoadTexture("Resources/uvChecker.png");
 	Microsoft::WRL::ComPtr<ID3D12Resource> uvCheckerResource = CreateTextureResource(device, uvCheckerImages.GetMetadata());
-	UploadTextureData(uvCheckerResource.Get(), uvCheckerImages);
+	UploadTextureData(uvCheckerResource.Get(), uvCheckerImages, device, commandList);
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU3 = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter);
 	{
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -425,6 +425,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
+	
+
 #pragma region 全モデルデータの読み込み・リソース生成
 
 	struct ModelEntry {
@@ -440,7 +442,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	{ "multiMeshOBJ",     "Resources/multiMesh",     "multiMesh.obj" },
 	{ "teapotOBJ",        "Resources/teapot",        "teapot.obj" },
 	{ "bunnyOBJ",         "Resources/bunny",         "bunny.obj" },
-	{ "suzanneOBJ",       "Resources/suzanne",       "suzanne.obj" }
+	{ "suzanneOBJ",       "Resources/suzanne",       "suzanne.obj" },
+	{ "playerOBJ",       "Resources/player",       "player.obj" },
 	};
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> loadedTextureResources;
@@ -487,7 +490,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			{
 				DirectX::ScratchImage mTexImages = LoadTexture(texPath);
 				Microsoft::WRL::ComPtr<ID3D12Resource> tResource = CreateTextureResource(device, mTexImages.GetMetadata());
-				UploadTextureData(tResource.Get(), mTexImages);
+				UploadTextureData(tResource.Get(), mTexImages, device, commandList);
 
 				gpuSrvHandle = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter);
 				D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -770,13 +773,34 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	materialData->enableLighting = 2;
 	sphereMaterialData->enableLighting = 2;
 
-#pragma endregion
-
 	bool useMonsterBall = true;
 	bool useSpriteMonsterBall = false;
 
 	float uiLightDirection[3] = { 0.0f, -1.0f, 0.0f };
 	float sphereRotate[3] = { 0.0f, 0.0f, 0.0f };
+
+#pragma endregion
+
+	hr = commandList->Close();
+	assert(SUCCEEDED(hr));
+
+	ID3D12CommandList* initCommandLists[] = { commandList };
+	commandQueue->ExecuteCommandLists(1, initCommandLists);
+
+	// GPUの完了を待機
+	fenceValue++;
+	commandQueue->Signal(fence, fenceValue);
+	if (fence->GetCompletedValue() < fenceValue)
+	{
+		fence->SetEventOnCompletion(fenceValue, fenceEvent);
+		WaitForSingleObject(fenceEvent, INFINITE);
+	}
+
+	// メインループ用にコマンドリストをリセット
+	hr = commandAllocator->Reset();
+	assert(SUCCEEDED(hr));
+	hr = commandList->Reset(commandAllocator, nullptr);
+	assert(SUCCEEDED(hr));
 
 	while (msg.message != WM_QUIT)
 	{
@@ -859,20 +883,34 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			ImGui::Begin("Lighting Settings");
 
+			// メインマテリアルカラーの編集
 			ImGui::ColorEdit4("Material Color", &materialData->color.x);
 
+			// ライティングの選択項目
 			int currentLightingType = materialData->enableLighting;
 			const char* lightingItems[] = { "None", "Lambert", "Half Lambert" };
 
 			if (ImGui::Combo("Lighting", &currentLightingType, lightingItems, static_cast<int>(std::size(lightingItems))))
 			{
+				// 既存のオブジェクトに反映
 				materialData->enableLighting = currentLightingType;
 				sphereMaterialData->enableLighting = currentLightingType;
+
+				// --- 追加: modelEntries 中の全インスタンスにも反映 ---
+				for (auto& model : modelEntries)
+				{
+					for (auto& inst : model.instances)
+					{
+						if (inst.materialData)
+						{
+							inst.materialData->enableLighting = currentLightingType;
+						}
+					}
+				}
 			}
 
 			ImGui::Separator();
 			ImGui::ColorEdit4("Light Color", &directionalLightData->color.x);
-
 			ImGui::SliderFloat3("Light Direction", uiLightDirection, -1.0f, 1.0f);
 			ImGui::SliderFloat("Light Intensity", &directionalLightData->intensity, 0.0f, 5.0f);
 
@@ -994,6 +1032,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 						if (ImGui::TreeNode(meshLabel.c_str()))
 						{
 							ImGui::Checkbox("Visible", &inst.visible);
+
+							// --- 追加: 個別 Lighting & Material Color 設定 ---
+							if (inst.materialData)
+							{
+								ImGui::Text("Material Settings");
+								ImGui::ColorEdit4("Color", &inst.materialData->color.x);
+
+								int instLighting = inst.materialData->enableLighting;
+								const char* lightingTypes[] = { "None", "Lambert", "Half Lambert" };
+								if (ImGui::Combo("Lighting Mode", &instLighting, lightingTypes, static_cast<int>(std::size(lightingTypes))))
+								{
+									inst.materialData->enableLighting = instLighting;
+								}
+							}
+							ImGui::Separator();
+
 							ImGui::SliderFloat3("Position", &inst.transform.translate.x, -10.0f, 10.0f);
 							ImGui::SliderFloat3("Rotate", &inst.transform.rotate.x, -3.14f, 3.14f);
 							ImGui::SliderFloat3("Scale", &inst.transform.scale.x, 0.01f, 5.0f);
