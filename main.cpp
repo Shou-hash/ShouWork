@@ -859,63 +859,226 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			static int spriteTextureIndex = 0;
 
-			ImGui::Begin("Texture Settings");
-			ImGui::Checkbox("use MonsterBall Texture", &useMonsterBall);
-			ImGui::Checkbox("Show Central Model", &showModel);
-			ImGui::Checkbox("Show Sprite", &showSprite);
-			ImGui::Checkbox("Show Sphere", &showSphere);
+			ImGui::Begin("Scene Control Panel");
 
-			ImGui::Checkbox("Model: use MonsterBall Texture", &useMonsterBall);
-
-			ImGui::Separator();
-			ImGui::Text("Sprite Texture Select:");
-			ImGui::RadioButton("Sprite: uvChecker", &spriteTextureIndex, 0); ImGui::SameLine();
-			ImGui::RadioButton("Sprite: MonsterBall", &spriteTextureIndex, 1); ImGui::SameLine();
-			ImGui::RadioButton("Sprite: Model Texture", &spriteTextureIndex, 2);
-
-			ImGui::Separator();
-			ImGui::Text("Sphere Texture Select:");
-			ImGui::RadioButton("Sphere: uvChecker", &sphereTextureIndex, 0); ImGui::SameLine();
-			ImGui::RadioButton("Sphere: MonsterBall", &sphereTextureIndex, 1); ImGui::SameLine();
-			ImGui::RadioButton("Sphere: Model Texture", &sphereTextureIndex, 2);
-
-			ImGui::End();
-
-			ImGui::Begin("Lighting Settings");
-
-			// メインマテリアルカラーの編集
-			ImGui::ColorEdit4("Material Color", &materialData->color.x);
-
-			// ライティングの選択項目
-			int currentLightingType = materialData->enableLighting;
-			const char* lightingItems[] = { "None", "Lambert", "Half Lambert" };
-
-			if (ImGui::Combo("Lighting", &currentLightingType, lightingItems, static_cast<int>(std::size(lightingItems))))
+			if (ImGui::BeginTabBar("SceneControlTabBar"))
 			{
-				// 既存のオブジェクトに反映
-				materialData->enableLighting = currentLightingType;
-				sphereMaterialData->enableLighting = currentLightingType;
-
-				// --- 追加: modelEntries 中の全インスタンスにも反映 ---
-				for (auto& model : modelEntries)
+				// -------------------------------------------------------------
+				// 1. シーン共通平行光源 (Global Light)
+				// -------------------------------------------------------------
+				if (ImGui::BeginTabItem("Global Light"))
 				{
-					for (auto& inst : model.instances)
+					ImGui::Text("Directional Light Settings");
+					ImGui::Separator();
+					ImGui::ColorEdit4("Light Color", &directionalLightData->color.x);
+					ImGui::SliderFloat3("Light Direction", uiLightDirection, -1.0f, 1.0f);
+					ImGui::SliderFloat("Light Intensity", &directionalLightData->intensity, 0.0f, 5.0f);
+
+					ImGui::EndTabItem();
+				}
+
+				// -------------------------------------------------------------
+				// 2. OBJモデル群 (OBJ Models) - 個別 Lighting & Transform
+				// -------------------------------------------------------------
+				if (ImGui::BeginTabItem("OBJ Models"))
+				{
+					const char* lightingTypes[] = { "None (0)", "Lambert (1)", "Half Lambert (2)" };
+
+					for (size_t mIdx = 0; mIdx < modelEntries.size(); ++mIdx)
 					{
-						if (inst.materialData)
+						ImGui::PushID(static_cast<int>(mIdx));
+						if (ImGui::TreeNode(modelEntries[mIdx].name.c_str()))
 						{
-							inst.materialData->enableLighting = currentLightingType;
+							for (size_t subIdx = 0; subIdx < modelEntries[mIdx].instances.size(); ++subIdx)
+							{
+								ImGui::PushID(static_cast<int>(subIdx));
+								auto& inst = modelEntries[mIdx].instances[subIdx];
+								std::string meshLabel = std::format("Mesh {}", subIdx);
+
+								if (ImGui::TreeNode(meshLabel.c_str()))
+								{
+									ImGui::Checkbox("Visible", &inst.visible);
+
+									// 個別 Material & Lighting 設定
+									if (inst.materialData)
+									{
+										if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen))
+										{
+											ImGui::ColorEdit4("Material Color", &inst.materialData->color.x);
+
+											int instLighting = inst.materialData->enableLighting;
+											if (ImGui::Combo("Lighting Mode", &instLighting, lightingTypes, static_cast<int>(std::size(lightingTypes))))
+											{
+												inst.materialData->enableLighting = instLighting;
+											}
+										}
+									}
+
+									// Transform 設定
+									if (ImGui::CollapsingHeader("Transform"))
+									{
+										ImGui::SliderFloat3("Position", &inst.transform.translate.x, -10.0f, 10.0f);
+										ImGui::SliderFloat3("Rotate", &inst.transform.rotate.x, -3.14f, 3.14f);
+										ImGui::SliderFloat3("Scale", &inst.transform.scale.x, 0.01f, 5.0f);
+									}
+
+									// UV Transform 設定
+									if (ImGui::CollapsingHeader("UV Transform"))
+									{
+										ImGui::SliderFloat2("UV Scale", inst.uiUVScale, 0.1f, 10.0f);
+										ImGui::SliderFloat("UV Rotate", &inst.uiUVRotate, -360.0f, 360.0f);
+										ImGui::SliderFloat2("UV Translate", inst.uiUVTranslate, -5.0f, 5.0f);
+									}
+
+									// Texture 設定
+									if (ImGui::CollapsingHeader("Texture Choice"))
+									{
+										ImGui::RadioButton("Default MTL", &inst.textureIndex, 0); ImGui::SameLine();
+										ImGui::RadioButton("MonsterBall", &inst.textureIndex, 1); ImGui::SameLine();
+										ImGui::RadioButton("uvChecker", &inst.textureIndex, 2);
+									}
+
+									ImGui::TreePop();
+								}
+								ImGui::PopID();
+							}
+							ImGui::TreePop();
+						}
+						ImGui::PopID();
+					}
+					ImGui::EndTabItem();
+				}
+
+				// -------------------------------------------------------------
+				// 3. 中央モデル (Central Model)
+				// -------------------------------------------------------------
+				if (ImGui::BeginTabItem("Central Model"))
+				{
+					ImGui::Checkbox("Show Central Model", &showModel);
+
+					if (showModel)
+					{
+						const char* lightingTypes[] = { "None (0)", "Lambert (1)", "Half Lambert (2)" };
+
+						if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen))
+						{
+							ImGui::ColorEdit4("Material Color", &materialData->color.x);
+
+							int lightingType = materialData->enableLighting;
+							if (ImGui::Combo("Lighting Mode", &lightingType, lightingTypes, static_cast<int>(std::size(lightingTypes))))
+							{
+								materialData->enableLighting = lightingType;
+							}
+						}
+
+						if (ImGui::CollapsingHeader("Transform & UV"))
+						{
+							ImGui::SliderFloat3("Rotate", sphereRotate, 0.0f, 360.0f);
+							ImGui::SliderFloat2("UV Scale", uiUVScale, 0.1f, 10.0f);
+							ImGui::SliderFloat("UV Rotate", &uiUVRotate, -360.0f, 360.0f);
+							ImGui::SliderFloat2("UV Translate", uiUVTranslate, -5.0f, 5.0f);
+						}
+
+						if (ImGui::CollapsingHeader("Texture Select"))
+						{
+							ImGui::Checkbox("use MonsterBall Texture", &useMonsterBall);
 						}
 					}
+					ImGui::EndTabItem();
 				}
-			}
 
-			ImGui::Separator();
-			ImGui::ColorEdit4("Light Color", &directionalLightData->color.x);
-			ImGui::SliderFloat3("Light Direction", uiLightDirection, -1.0f, 1.0f);
-			ImGui::SliderFloat("Light Intensity", &directionalLightData->intensity, 0.0f, 5.0f);
+				// -------------------------------------------------------------
+				// 4. 球体モデル (Sphere)
+				// -------------------------------------------------------------
+				if (ImGui::BeginTabItem("Sphere"))
+				{
+					ImGui::Checkbox("Show Sphere", &showSphere);
+
+					if (showSphere)
+					{
+						const char* lightingTypes[] = { "None (0)", "Lambert (1)", "Half Lambert (2)" };
+
+						if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen))
+						{
+							ImGui::ColorEdit4("Material Color", &sphereMaterialData->color.x);
+
+							int sphereLighting = sphereMaterialData->enableLighting;
+							if (ImGui::Combo("Lighting Mode", &sphereLighting, lightingTypes, static_cast<int>(std::size(lightingTypes))))
+							{
+								sphereMaterialData->enableLighting = sphereLighting;
+							}
+						}
+
+						if (ImGui::CollapsingHeader("Transform & UV"))
+						{
+							ImGui::SliderFloat3("Scale", &sphereTransform.scale.x, 0.1f, 10.0f);
+							ImGui::SliderFloat3("Translate", &sphereTransform.translate.x, -10.0f, 10.0f);
+							ImGui::SliderFloat2("UV Scale", uiSphereUVScale, 0.1f, 10.0f);
+							ImGui::SliderFloat("UV Rotate", &uiSphereUVRotate, -360.0f, 360.0f);
+							ImGui::SliderFloat2("UV Translate", uiSphereUVTranslate, -5.0f, 5.0f);
+						}
+
+						if (ImGui::CollapsingHeader("Texture Select"))
+						{
+							ImGui::RadioButton("Sphere: uvChecker", &sphereTextureIndex, 0); ImGui::SameLine();
+							ImGui::RadioButton("Sphere: MonsterBall", &sphereTextureIndex, 1); ImGui::SameLine();
+							ImGui::RadioButton("Sphere: Model Texture", &sphereTextureIndex, 2);
+						}
+					}
+					ImGui::EndTabItem();
+				}
+
+				// -------------------------------------------------------------
+				// 5. スプライト (Sprite)
+				// -------------------------------------------------------------
+				if (ImGui::BeginTabItem("Sprite"))
+				{
+					ImGui::Checkbox("Show Sprite", &showSprite);
+
+					if (showSprite)
+					{
+						const char* lightingTypes[] = { "None (0)", "Lambert (1)", "Half Lambert (2)" };
+
+						if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen))
+						{
+							ImGui::ColorEdit4("Material Color", &spriteMaterialData->color.x);
+
+							int spriteLighting = spriteMaterialData->enableLighting;
+							if (ImGui::Combo("Lighting Mode", &spriteLighting, lightingTypes, static_cast<int>(std::size(lightingTypes))))
+							{
+								spriteMaterialData->enableLighting = spriteLighting;
+							}
+						}
+
+						if (ImGui::CollapsingHeader("Screen Position & Size"))
+						{
+							ImGui::SliderFloat2("Position (Pixel)", uiSpritePosition, 0.0f, 1280.0f);
+							ImGui::SliderFloat2("Size (Pixel)", uiSpriteSize, 1.0f, 1280.0f);
+						}
+
+						if (ImGui::CollapsingHeader("UV Transform"))
+						{
+							ImGui::SliderFloat2("UV Scale", uiSpriteUVScale, 0.1f, 10.0f);
+							ImGui::SliderFloat("UV Rotate", &uiSpriteUVRotate, -360.0f, 360.0f);
+							ImGui::SliderFloat2("UV Translate", uiSpriteUVTranslate, -5.0f, 5.0f);
+						}
+
+						if (ImGui::CollapsingHeader("Texture Select"))
+						{
+							ImGui::RadioButton("Sprite: uvChecker", &spriteTextureIndex, 0); ImGui::SameLine();
+							ImGui::RadioButton("Sprite: MonsterBall", &spriteTextureIndex, 1); ImGui::SameLine();
+							ImGui::RadioButton("Sprite: Model Texture", &spriteTextureIndex, 2);
+						}
+					}
+					ImGui::EndTabItem();
+				}
+
+				ImGui::EndTabBar();
+			}
 
 			ImGui::End();
 
+			// --- 演算・定数バッファ反映処理 (従来通り) ---
 			transform.rotate.x = sphereRotate[0] * (std::numbers::pi_v<float> / 180.0f);
 			transform.rotate.y = sphereRotate[1] * (std::numbers::pi_v<float> / 180.0f);
 			transform.rotate.z = sphereRotate[2] * (std::numbers::pi_v<float> / 180.0f);
@@ -937,6 +1100,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			spriteWvpData->WVP = spriteWVPMatrix;
 			spriteWvpData->World = spriteWorldMatrix;
 
+			// 平行光源方向の正規化計算
 			float length = std::sqrt(uiLightDirection[0] * uiLightDirection[0] +
 				uiLightDirection[1] * uiLightDirection[1] +
 				uiLightDirection[2] * uiLightDirection[2]);
@@ -951,30 +1115,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 				directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
 			}
 
-			ImGui::Begin("Display Settings");
-
-			ImGui::Separator();
-			ImGui::Text("Model Transform");
-			ImGui::SliderFloat3("Sphere Rotate", sphereRotate, 0.0f, 360.0f);
-			ImGui::Text("--- Central Model UV ---");
-			ImGui::SliderFloat2("Model UV Scale", uiUVScale, 0.1f, 10.0f);
-			ImGui::SliderFloat("Model UV Rotate", &uiUVRotate, -360.0f, 360.0f);
-			ImGui::SliderFloat2("Model UV Translate", uiUVTranslate, -5.0f, 5.0f);
-
+			// 中央モデル UV Transform
 			uvScale.x = uiUVScale[0];
 			uvScale.y = uiUVScale[1];
 			uvRotate.z = uiUVRotate * (std::numbers::pi_v<float> / 180.0f);
 			uvTranslate.x = uiUVTranslate[0];
 			uvTranslate.y = uiUVTranslate[1];
-
 			materialData->uvTransform = MakeUVTransformMatrix(uvScale, uvRotate, uvTranslate);
 
-			ImGui::Separator();
-			ImGui::Text("Sprite UV");
-			ImGui::SliderFloat2("Sprite UV Scale", uiSpriteUVScale, 0.1f, 10.0f);
-			ImGui::SliderFloat("Sprite UV Rotate", &uiSpriteUVRotate, -360.0f, 360.0f);
-			ImGui::SliderFloat2("Sprite UV Translate", uiSpriteUVTranslate, -5.0f, 5.0f);
-
+			// Sprite Transform & UV
 			spriteUVScale.x = uiSpriteUVScale[0];
 			spriteUVScale.y = uiSpriteUVScale[1];
 			spriteUVRotate.z = uiSpriteUVRotate * (std::numbers::pi_v<float> / 180.0f);
@@ -982,27 +1131,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			spriteUVTranslate.y = uiSpriteUVTranslate[1];
 			spriteMaterialData->uvTransform = MakeUVTransformMatrix(spriteUVScale, spriteUVRotate, spriteUVTranslate);
 
-			ImGui::Separator();
-			ImGui::Text("Sprite Screen Position");
-			ImGui::SliderFloat2("Position (Pixel)", uiSpritePosition, 0.0f, 1280.0f);
-
 			spriteTransform.translate.x = uiSpritePosition[0];
 			spriteTransform.translate.y = uiSpritePosition[1];
-
-			ImGui::Text("Sprite Screen Size");
-			ImGui::SliderFloat2("Size (Pixel)", uiSpriteSize, 1.0f, 1280.0f);
-
 			spriteTransform.scale.x = uiSpriteSize[0];
 			spriteTransform.scale.y = uiSpriteSize[1];
 
-			ImGui::Separator();
-			ImGui::Text("Sphere Transform & UV");
-			ImGui::SliderFloat3("Sphere Scale", &sphereTransform.scale.x, 0.1f, 10.0f);
-			ImGui::SliderFloat3("Sphere Translate", &sphereTransform.translate.x, -10.0f, 10.0f);
-			ImGui::SliderFloat2("Sphere UV Scale", uiSphereUVScale, 0.1f, 10.0f);
-			ImGui::SliderFloat("Sphere UV Rotate", &uiSphereUVRotate, -360.0f, 360.0f);
-			ImGui::SliderFloat2("Sphere UV Translate", uiSphereUVTranslate, -5.0f, 5.0f);
-
+			// Sphere Transform & UV
 			Matrix4x4 sphereWorldMatrix = MakeAffineMatrix(sphereTransform.scale, sphereTransform.rotate, sphereTransform.translate);
 			Matrix4x4 sphereWVPMatrix = Multiply(sphereWorldMatrix, Multiply(viewMatrix, projectionMatrix));
 			sphereWvpData->WVP = sphereWVPMatrix;
@@ -1015,64 +1149,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			sphereUVTranslate.y = uiSphereUVTranslate[1];
 			sphereMaterialData->uvTransform = MakeUVTransformMatrix(sphereUVScale, sphereUVRotate, sphereUVTranslate);
 
-			ImGui::End();
-
-			// 全OBJモデル個別UI設定パネル
-			ImGui::Begin("OBJ Models Controller");
-			for (size_t mIdx = 0; mIdx < modelEntries.size(); ++mIdx)
-			{
-				ImGui::PushID(static_cast<int>(mIdx));
-				if (ImGui::TreeNode(modelEntries[mIdx].name.c_str()))
-				{
-					for (size_t subIdx = 0; subIdx < modelEntries[mIdx].instances.size(); ++subIdx)
-					{
-						ImGui::PushID(static_cast<int>(subIdx));
-						auto& inst = modelEntries[mIdx].instances[subIdx];
-						std::string meshLabel = std::format("Mesh {}", subIdx);
-						if (ImGui::TreeNode(meshLabel.c_str()))
-						{
-							ImGui::Checkbox("Visible", &inst.visible);
-
-							// --- 追加: 個別 Lighting & Material Color 設定 ---
-							if (inst.materialData)
-							{
-								ImGui::Text("Material Settings");
-								ImGui::ColorEdit4("Color", &inst.materialData->color.x);
-
-								int instLighting = inst.materialData->enableLighting;
-								const char* lightingTypes[] = { "None", "Lambert", "Half Lambert" };
-								if (ImGui::Combo("Lighting Mode", &instLighting, lightingTypes, static_cast<int>(std::size(lightingTypes))))
-								{
-									inst.materialData->enableLighting = instLighting;
-								}
-							}
-							ImGui::Separator();
-
-							ImGui::SliderFloat3("Position", &inst.transform.translate.x, -10.0f, 10.0f);
-							ImGui::SliderFloat3("Rotate", &inst.transform.rotate.x, -3.14f, 3.14f);
-							ImGui::SliderFloat3("Scale", &inst.transform.scale.x, 0.01f, 5.0f);
-
-							ImGui::Text("UV Transform");
-							ImGui::SliderFloat2("UV Scale", inst.uiUVScale, 0.1f, 10.0f);
-							ImGui::SliderFloat("UV Rotate", &inst.uiUVRotate, -360.0f, 360.0f);
-							ImGui::SliderFloat2("UV Translate", inst.uiUVTranslate, -5.0f, 5.0f);
-
-							ImGui::Text("Texture Choice");
-							ImGui::RadioButton("Default MTL", &inst.textureIndex, 0); ImGui::SameLine();
-							ImGui::RadioButton("MonsterBall", &inst.textureIndex, 1); ImGui::SameLine();
-							ImGui::RadioButton("uvChecker", &inst.textureIndex, 2);
-
-							ImGui::TreePop();
-						}
-						ImGui::PopID();
-					}
-					ImGui::TreePop();
-				}
-				ImGui::PopID();
-			}
-			ImGui::End();
-
-			// 行列・UV演算反映（全モデル・全インスタンスに対して毎フレーム更新）
+			// 全OBJモデルの行列・UV演算反映
 			for (auto& model : modelEntries)
 			{
 				for (auto& inst : model.instances)
