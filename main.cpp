@@ -380,14 +380,17 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	const DirectX::TexMetadata& metadata = mipImages.GetMetadata();
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource1 = CreateTextureResource(device, metadata);
-	UploadTextureData(textureResource1.Get(), mipImages);
+	ID3D12Resource* intermediateResource1 = UploadTextureData(textureResource1.Get(), mipImages, device, commandList);
 
 	// 3. デバッグ用の2枚目のテクスチャ（モンスターボール）をロードする
 	DirectX::ScratchImage mipImages2 = LoadTexture("Resources/monsterBall.png");
 	const DirectX::TexMetadata& metadata2 = mipImages2.GetMetadata();
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 = CreateTextureResource(device, metadata2);
-	UploadTextureData(textureResource2.Get(), mipImages2);
+	ID3D12Resource* intermediateResource2 = UploadTextureData(textureResource2.Get(), mipImages2, device, commandList);
+
+	hr = commandList->Close();
+	assert(SUCCEEDED(hr));
 
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = kClientWidth;
@@ -523,6 +526,28 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	IDxcIncludeHandler* dxcIncludeHandler = nullptr;
 	hr = dxcUtils->CreateDefaultIncludeHandler(&dxcIncludeHandler);
 	assert(SUCCEEDED(hr));
+
+	ID3D12CommandList* commandLists[] = { commandList };
+	commandQueue->ExecuteCommandLists(1, commandLists);
+
+	// GPUの完了を待つ
+	fenceValue++;
+	commandQueue->Signal(fence, fenceValue);
+	if (fence->GetCompletedValue() < fenceValue)
+	{
+		fence->SetEventOnCompletion(fenceValue, fenceEvent);
+		WaitForSingleObject(fenceEvent, INFINITE);
+	}
+
+	// 次の描画コマンドを積めるようアロケータとコマンドリストをResetする
+	hr = commandAllocator->Reset();
+	assert(SUCCEEDED(hr));
+	hr = commandList->Reset(commandAllocator, nullptr);
+	assert(SUCCEEDED(hr));
+
+	// 転送が完了したので中間リソースを安全に解放(Release)する
+	if (intermediateResource1) { intermediateResource1->Release(); }
+	if (intermediateResource2) { intermediateResource2->Release(); }
 
 #pragma region PSO
 

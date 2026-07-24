@@ -15,6 +15,8 @@
 #include <dxcapi.h>
 #include <xaudio2.h>
 #include <fstream>
+#include <vector>
+#include "externals/DirectXTex/d3dx12.h"
 
 #include "ConvertString.h"
 #include "Matrix4x4.h"
