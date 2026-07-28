@@ -1,0 +1,12 @@
+# Blender 5.2.0 LTS MTL File: 'enemy三角化.blend'
+# www.blender.org
+
+newmtl Enemy
+Ns 498.071259
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 3.900000
+d 1.000000
+illum 2
+map_Kd C:/Users/鍾　梓源/Desktop/二年前期/RS2/uvEnemy.png
