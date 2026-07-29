@@ -859,16 +859,27 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			static int spriteTextureIndex = 0;
 
-			// =================================================================
 			// 単一の ImGui ウィンドウに全コントロールを集約
-			// =================================================================
 			ImGui::Begin("Scene Control Panel");
 
 			if (ImGui::BeginTabBar("SceneControlTabBar"))
 			{
-				// -------------------------------------------------------------
+				// 0. サウンド再生 (Sound Control)
+				if (ImGui::BeginTabItem("Sound"))
+				{
+					ImGui::Text("Audio Control Panel");
+					ImGui::Separator();
+
+					// Play ボタンを押した瞬間にサウンドを再生
+					if (ImGui::Button("Play Fanfare", ImVec2(120, 30)))
+					{
+						soundManager->SoundPlayWave(soundData);
+					}
+
+					ImGui::EndTabItem();
+				}
+
 				// 1. シーン共通平行光源 (Global Light)
-				// -------------------------------------------------------------
 				if (ImGui::BeginTabItem("Global Light"))
 				{
 					ImGui::Text("Directional Light Settings");
@@ -880,9 +891,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 					ImGui::EndTabItem();
 				}
 
-				// -------------------------------------------------------------
 				// 2. OBJモデル群 (OBJ Models) - 個別 Lighting & Transform
-				// -------------------------------------------------------------
 				if (ImGui::BeginTabItem("OBJ Models"))
 				{
 					const char* lightingTypes[] = { "None (0)", "Lambert (1)", "Half Lambert (2)" };
@@ -952,9 +961,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 					ImGui::EndTabItem();
 				}
 
-				// -------------------------------------------------------------
 				// 3. 中央モデル (Central Model)
-				// -------------------------------------------------------------
 				if (ImGui::BeginTabItem("Central Model"))
 				{
 					ImGui::Checkbox("Show Central Model", &showModel);
@@ -990,9 +997,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 					ImGui::EndTabItem();
 				}
 
-				// -------------------------------------------------------------
 				// 4. 球体モデル (Sphere)
-				// -------------------------------------------------------------
 				if (ImGui::BeginTabItem("Sphere"))
 				{
 					ImGui::Checkbox("Show Sphere", &showSphere);
@@ -1031,9 +1036,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 					ImGui::EndTabItem();
 				}
 
-				// -------------------------------------------------------------
 				// 5. スプライト (Sprite)
-				// -------------------------------------------------------------
 				if (ImGui::BeginTabItem("Sprite"))
 				{
 					ImGui::Checkbox("Show Sprite", &showSprite);
@@ -1081,7 +1084,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 			ImGui::End();
 
-			// --- 演算・定数バッファ反映処理 (従来通り) ---
+			// 演算・定数バッファ反映処理 (従来通り)
 			transform.rotate.x = sphereRotate[0] * (std::numbers::pi_v<float> / 180.0f);
 			transform.rotate.y = sphereRotate[1] * (std::numbers::pi_v<float> / 180.0f);
 			transform.rotate.z = sphereRotate[2] * (std::numbers::pi_v<float> / 180.0f);
