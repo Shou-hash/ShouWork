@@ -15,7 +15,6 @@
 #include <dxcapi.h>
 #include <xaudio2.h>
 #include <fstream>
-#include <vector>
 #include "externals/DirectXTex/d3dx12.h"
 
 #include "ConvertString.h"
@@ -91,11 +90,25 @@ struct MaterialData {
 	std::string textureFilePath;
 };
 
-struct ModelData
+struct MeshData
 {
 	std::vector<VertexData> vertices;
 	MaterialData material;
 };
 
+struct ModelData
+{
+	std::vector<VertexData> vertices;
+	MaterialData material;
+	std::vector<MeshData> meshes;
+};
+
+ID3D12Resource* UploadTextureData(
+	ID3D12Resource* texture,
+	const DirectX::ScratchImage& mipImages,
+	ID3D12Device* device,
+	ID3D12GraphicsCommandList* commandList
+);
+
 // DXGIファクトリー (実体はmain.cpp)
-extern IDXGIFactory7* dxgiFactory;
+extern Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory;

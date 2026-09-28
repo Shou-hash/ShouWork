@@ -44,9 +44,4 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& fileN
 
 MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& fileName);
 
-[[nodiscard]]
-ID3D12Resource* UploadTextureData(
-	ID3D12Resource* texture,
-	const DirectX::ScratchImage& mipImages,
-	ID3D12Device* device,
-	ID3D12GraphicsCommandList* commandList);
+ID3D12Resource* UploadTextureData(ID3D12Resource* texture, const DirectX::ScratchImage& mipImages, ID3D12Device* device, ID3D12GraphicsCommandList* commandList);

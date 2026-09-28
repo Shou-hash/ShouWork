@@ -262,3 +262,28 @@ Vector3 TransformNormal(const Vector3& vector, const Matrix4x4& matrix)
 	result.z = vector.x * matrix.m[0][2] + vector.y * matrix.m[1][2] + vector.z * matrix.m[2][2];
 	return result;
 }
+
+// UV Transform 用の行列計算関数
+Matrix4x4 MakeUVTransformMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate) {
+	// 1. スケール行列
+	Matrix4x4 matScale = MakeIdentity4x4();
+	matScale.m[0][0] = scale.x;
+	matScale.m[1][1] = scale.y;
+
+	// 2. 回転行列 (Z軸回転)
+	Matrix4x4 matRotate = MakeIdentity4x4();
+	float sinZ = std::sin(rotate.z);
+	float cosZ = std::cos(rotate.z);
+	matRotate.m[0][0] = cosZ;
+	matRotate.m[0][1] = sinZ;
+	matRotate.m[1][0] = -sinZ;
+	matRotate.m[1][1] = cosZ;
+
+	// 3. 平行移動行列
+	Matrix4x4 matTranslate = MakeIdentity4x4();
+	matTranslate.m[3][0] = translate.x;
+	matTranslate.m[3][1] = translate.y;
+
+	// SRT の順で合成 (Scale -> Rotate -> Translate)
+	return Multiply(matScale, Multiply(matRotate, matTranslate));
+}

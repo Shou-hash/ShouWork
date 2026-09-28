@@ -28,3 +28,4 @@ Matrix4x4 MakeRotateZMatrix(float angle);
 Matrix4x4 MakeTranslateMatrix(const Vector3& translation);
 
 Vector3 TransformNormal(const Vector3& vector, const Matrix4x4& matrix);
+Matrix4x4 MakeUVTransformMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate);
