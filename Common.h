@@ -111,4 +111,4 @@ ID3D12Resource* UploadTextureData(
 );
 
 // DXGIファクトリー (実体はmain.cpp)
-extern IDXGIFactory7* dxgiFactory;
+extern Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory;
