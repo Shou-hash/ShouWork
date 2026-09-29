@@ -14,7 +14,6 @@
 #include <dxgidebug.h>
 #include <dxcapi.h>
 #include <xaudio2.h>
-#include <fstream>
 #include "externals/DirectXTex/d3dx12.h"
 
 #include "ConvertString.h"
@@ -34,7 +33,6 @@
 #include <dinput.h>
 
 #pragma comment(lib, "dinput8.lib")
-#pragma comment(lib, "dxguid.lib")
 
 struct Vector4 {
 	float x, y, z, w;
