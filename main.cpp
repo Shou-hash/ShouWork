@@ -1,12 +1,12 @@
-#include "Common.h"
-#include "WinApp.h"
-#include "DirectXCommon.h"
+#include "Engine/Base/Common.h"
+#include "Engine/Base/WinApp.h"
+#include "Engine/Base/DirectXCommon.h"
 #include <numbers>
-#include "ResourceObject.h"
+#include "Engine/Base/ResourceObject.h"
 #include <wrl.h>
-#include "Sound.h"
-#include "DebugCamera.h"
-#include "DirectInput.h"
+#include "Engine/Audio/Sound.h"
+#include "Engine/3d/DebugCamera.h"
+#include "Engine/input/DirectInput.h"
 #pragma comment(lib, "dxgi.lib")
 
 // DXGIファクトリーの実体定義
@@ -623,11 +623,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
 	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
-	IDxcBlob* vertexShaderBlob = CompileShader(L"Object3d.VS.hlsl",
+	IDxcBlob* vertexShaderBlob = CompileShader(L"Engine/Shaders/Object3D.VS.hlsl",
 		L"vs_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
 	assert(vertexShaderBlob != nullptr);
 
-	IDxcBlob* pixelShaderBlob = CompileShader(L"Object3d.PS.hlsl",
+	IDxcBlob* pixelShaderBlob = CompileShader(L"Engine/Shaders/Object3D.PS.hlsl",
 		L"ps_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
 	assert(pixelShaderBlob != nullptr);
 
