@@ -13,133 +13,85 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="imgui">
-      <UniqueIdentifier>{9f1ff70d-4375-4e09-8b73-69038d686b5c}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="ConvertString.cpp">
+    <ClCompile Include="Engine\Math\Matrix4x4.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="externals\imgui\imgui.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_demo.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_draw.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_impl_dx12.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_impl_win32.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_tables.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_widgets.cpp">
-      <Filter>imgui</Filter>
-    </ClCompile>
-    <ClCompile Include="WinApp.cpp">
+    <ClCompile Include="Engine\Input\DirectInput.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="Matrix4x4.cpp">
+    <ClCompile Include="Engine\Base\ConvertString.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="ImguiCode.cpp">
+    <ClCompile Include="Engine\3D\DebugCamera.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="DirectXCommon.cpp">
+    <ClCompile Include="Engine\Base\DirectXCommon.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="ResourceObject.cpp">
+    <ClCompile Include="Engine\Debug\ImguiCode.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="Sound.cpp">
+    <ClCompile Include="Engine\3D\ModelLoader.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="DebugCamera.cpp">
+    <ClCompile Include="Engine\Base\ResourceObject.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="ModelLoader.cpp">
+    <ClCompile Include="Engine\Base\WinApp.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="DirectInput.cpp">
+    <ClCompile Include="Engine\Andio\Sound.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Object3d.VS.hlsl" />
-    <FxCompile Include="Object3d.PS.hlsl" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="ConvertString.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imconfig.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imgui.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imgui_impl_dx12.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imgui_impl_win32.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imgui_internal.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imstb_rectpack.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imstb_textedit.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="externals\imgui\imstb_truetype.h">
-      <Filter>imgui</Filter>
-    </ClInclude>
-    <ClInclude Include="WinApp.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Matrix4x4.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="ImguiCode.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="DirectXCommon.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Common.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="ResourceObject.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="Sound.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="DebugCamera.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="ModelLoader.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="DirectInput.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Object3d.hlsli" />
+    <None Include="Engine\Shaders\Object3d.hlsli" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Engine\Shaders\Object3d.PS.hlsl" />
+    <FxCompile Include="Engine\Shaders\Object3d.VS.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Engine\Math\Matrix4x4.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Input\DirectInput.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Debug\ImguiCode.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Base\Common.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Base\ConvertString.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Base\DirectXCommon.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Base\ResourceObject.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Base\WinApp.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Andio\Sound.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\3D\DebugCamera.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\3D\ModelLoader.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

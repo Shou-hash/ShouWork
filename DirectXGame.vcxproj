@@ -68,6 +68,7 @@
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -136,87 +137,20 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ConvertString.cpp" />
-    <ClCompile Include="DebugCamera.cpp" />
-    <ClCompile Include="DirectInput.cpp" />
-    <ClCompile Include="DirectXCommon.cpp" />
-    <ClCompile Include="externals\imgui\imgui.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_demo.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_draw.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_impl_dx12.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_impl_win32.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_tables.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="externals\imgui\imgui_widgets.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">false</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="ImguiCode.cpp" />
+    <ClCompile Include="Engine\3D\DebugCamera.cpp" />
+    <ClCompile Include="Engine\3D\ModelLoader.cpp" />
+    <ClCompile Include="Engine\Andio\Sound.cpp" />
+    <ClCompile Include="Engine\Base\ConvertString.cpp" />
+    <ClCompile Include="Engine\Base\DirectXCommon.cpp" />
+    <ClCompile Include="Engine\Base\ResourceObject.cpp" />
+    <ClCompile Include="Engine\Base\WinApp.cpp" />
+    <ClCompile Include="Engine\Debug\ImguiCode.cpp" />
+    <ClCompile Include="Engine\Input\DirectInput.cpp" />
+    <ClCompile Include="Engine\Math\Matrix4x4.cpp" />
     <ClCompile Include="main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
-    <ClCompile Include="Matrix4x4.cpp" />
-    <ClCompile Include="ModelLoader.cpp" />
-    <ClCompile Include="ResourceObject.cpp" />
-    <ClCompile Include="Sound.cpp" />
-    <ClCompile Include="WinApp.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Object3d.VS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="Object3d.PS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Common.h" />
-    <ClInclude Include="ConvertString.h" />
-    <ClInclude Include="DebugCamera.h" />
-    <ClInclude Include="DirectInput.h" />
-    <ClInclude Include="DirectXCommon.h" />
-    <ClInclude Include="externals\imgui\imconfig.h" />
-    <ClInclude Include="externals\imgui\imgui.h" />
-    <ClInclude Include="externals\imgui\imgui_impl_dx12.h" />
-    <ClInclude Include="externals\imgui\imgui_impl_win32.h" />
-    <ClInclude Include="externals\imgui\imgui_internal.h" />
-    <ClInclude Include="externals\imgui\imstb_rectpack.h" />
-    <ClInclude Include="externals\imgui\imstb_textedit.h" />
-    <ClInclude Include="externals\imgui\imstb_truetype.h" />
-    <ClInclude Include="ImguiCode.h" />
-    <ClInclude Include="Matrix4x4.h" />
-    <ClInclude Include="ModelLoader.h" />
-    <ClInclude Include="ResourceObject.h" />
-    <ClInclude Include="Sound.h" />
-    <ClInclude Include="WinApp.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />
@@ -227,7 +161,33 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Object3d.hlsli" />
+    <None Include="Engine\Shaders\Object3d.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Engine\Shaders\Object3d.PS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0_level_9_3</ShaderModel>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Engine\Shaders\Object3d.VS.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Engine\3D\DebugCamera.h" />
+    <ClInclude Include="Engine\3D\ModelLoader.h" />
+    <ClInclude Include="Engine\Andio\Sound.h" />
+    <ClInclude Include="Engine\Base\Common.h" />
+    <ClInclude Include="Engine\Base\ConvertString.h" />
+    <ClInclude Include="Engine\Base\DirectXCommon.h" />
+    <ClInclude Include="Engine\Base\ResourceObject.h" />
+    <ClInclude Include="Engine\Base\WinApp.h" />
+    <ClInclude Include="Engine\Debug\ImguiCode.h" />
+    <ClInclude Include="Engine\Input\DirectInput.h" />
+    <ClInclude Include="Engine\Math\Matrix4x4.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

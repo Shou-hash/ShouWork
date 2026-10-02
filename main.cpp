@@ -1,12 +1,12 @@
-#include "Common.h"
-#include "WinApp.h"
-#include "DirectXCommon.h"
+#include "Engine/Base/Common.h"
+#include "Engine/Base/WinApp.h"
+#include "Engine/Base/DirectXCommon.h"
 #include <numbers>
-#include "ResourceObject.h"
+#include "Engine/Base/ResourceObject.h"
 #include <wrl.h>
-#include "Sound.h"
-#include "DebugCamera.h"
-#include "DirectInput.h"
+#include "Engine/Andio/Sound.h"
+#include "Engine/3D/DebugCamera.h"
+#include "Engine/Input/DirectInput.h"
 #pragma comment(lib, "dxgi.lib")
 
 // DXGIファクトリーの実体定義

@@ -17,8 +17,8 @@
 #include "externals/DirectXTex/d3dx12.h"
 
 #include "ConvertString.h"
-#include "Matrix4x4.h"
-#include "ImguiCode.h"
+#include "Engine/Math/Matrix4x4.h"
+#include "Engine/Debug/ImguiCode.h"
 #include "externals/DirectXTex/DirectXTex.h"
 
 #pragma comment(lib, "xaudio2.lib")
