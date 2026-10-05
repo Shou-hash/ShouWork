@@ -138,7 +138,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Engine\2d\ImguiCode.cpp" />
+    <ClCompile Include="Engine\2d\TextureManager.cpp" />
     <ClCompile Include="Engine\3d\DebugCamera.cpp" />
+    <ClCompile Include="Engine\3d\ModelDraw.cpp" />
     <ClCompile Include="Engine\3d\ModelLoader.cpp" />
     <ClCompile Include="Engine\audio\Sound.cpp" />
     <ClCompile Include="Engine\base\ConvertString.cpp" />
@@ -182,7 +184,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\2d\ImguiCode.h" />
+    <ClInclude Include="Engine\2d\TextureManager.h" />
     <ClInclude Include="Engine\3d\DebugCamera.h" />
+    <ClInclude Include="Engine\3d\ModelDraw.h" />
     <ClInclude Include="Engine\3d\ModelLoader.h" />
     <ClInclude Include="Engine\audio\Sound.h" />
     <ClInclude Include="Engine\base\Common.h" />

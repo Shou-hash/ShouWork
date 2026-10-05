@@ -7,6 +7,9 @@
 #include "Engine/Audio/Sound.h"
 #include "Engine/3d/DebugCamera.h"
 #include "Engine/input/DirectInput.h"
+#include "Engine/3d/ModelLoader.h"
+#include "Engine/2d/TextureManager.h"
+#include "Engine/3d/ModelDraw.h"
 #pragma comment(lib, "dxgi.lib")
 
 // DXGIファクトリーの実体定義
@@ -33,30 +36,6 @@ bool IsExitKey(uint8_t keyNumber, const BYTE* key, const BYTE* keyPre) {
 	return (!key[keyNumber] && keyPre[keyNumber]);
 }
 
-// 個別モデル描画用内部データ構造体
-struct RenderMeshInstance {
-	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource = nullptr;
-	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
-	UINT vertexCount = 0;
-	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource = nullptr;
-	Material* materialData = nullptr;
-	Microsoft::WRL::ComPtr<ID3D12Resource> wvpResource = nullptr;
-	TransformationMatrix* wvpData = nullptr;
-
-	struct Transform transform = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
-	Vector3 uvScale = { 1.0f, 1.0f, 1.0f };
-	Vector3 uvRotate = { 0.0f, 0.0f, 0.0f };
-	Vector3 uvTranslate = { 0.0f, 0.0f, 0.0f };
-
-	float uiUVScale[2] = { 1.0f, 1.0f };
-	float uiUVRotate = 0.0f;
-	float uiUVTranslate[2] = { 0.0f, 0.0f };
-
-	int textureIndex = 0; // SRVインデックスまたはテクスチャ識別子
-	D3D12_GPU_DESCRIPTOR_HANDLE defaultSrvGpuHandle{};
-	bool visible = true;
-};
-
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
 	CoInitializeEx(0, COINIT_MULTITHREADED);
@@ -78,11 +57,19 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	std::string str0{ "STRING!!!" };
 	std::string str1{ std::to_string(10) };
 
-	std::filesystem::create_directories("logs");
+	std::error_code ec;
+	std::filesystem::create_directories("logs", ec);
+	if (ec) {
+		OutputDebugStringA("logs ディレクトリの作成に失敗しました。\n");
+	}
 	std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-	std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
-	std::chrono::zoned_time localTime{ std::chrono::current_zone(), nowSeconds };
-	std::string dateString = std::format("{:%Y%m%d_%H%M%S}", localTime);
+	std::time_t timeT = std::chrono::system_clock::to_time_t(now);
+	std::tm localTm{};
+	localtime_s(&localTm, &timeT); // OS非依存で安全にローカル時刻を取得
+
+	std::string dateString = std::format("{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}",
+		localTm.tm_year + 1900, localTm.tm_mon + 1, localTm.tm_mday,
+		localTm.tm_hour, localTm.tm_min, localTm.tm_sec);
 	std::string logFilePath = "logs/" + dateString + ".log";
 	std::ofstream logFile(logFilePath);
 
@@ -359,34 +346,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	UINT descriptorSize = device.Get()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	uint32_t srvIndexCounter = 0;
 
-#pragma region Textureの読み込みとSRVの作成
+	// 1. TextureManager の初期化
+	TextureManager::Initialize(
+		device.Get(),
+		commandList,
+		srvDescriptorHeap.Get(),
+		descriptorSize,
+		srvIndexCounter
+	);
 
-	DirectX::ScratchImage mipImages2 = LoadTexture("Resources/monsterBall.png");
-	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 = CreateTextureResource(device.Get(), mipImages2.GetMetadata());
-	UploadTextureData(textureResource2.Get(), mipImages2, device.Get(), commandList);
-	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter);
-	{
-		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-		srvDesc.Format = mipImages2.GetMetadata().format;
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		srvDesc.Texture2D.MipLevels = UINT(mipImages2.GetMetadata().mipLevels);
-		device.Get()->CreateShaderResourceView(textureResource2.Get(), &srvDesc, GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter++));
-	}
+#pragma region Textureの読み込みとSRVの作成 (簡略化)
 
-	DirectX::ScratchImage uvCheckerImages = LoadTexture("Resources/uvChecker.png");
-	Microsoft::WRL::ComPtr<ID3D12Resource> uvCheckerResource = CreateTextureResource(device.Get(), uvCheckerImages.GetMetadata());
-	UploadTextureData(uvCheckerResource.Get(), uvCheckerImages, device.Get(), commandList);
-	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU3 = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter);
-	{
-		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-		srvDesc.Format = uvCheckerImages.GetMetadata().format;
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		srvDesc.Texture2D.MipLevels = UINT(uvCheckerImages.GetMetadata().mipLevels);
-		device->CreateShaderResourceView(uvCheckerResource.Get(), &srvDesc, GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter++));
-	}
+	// TextureManager経由で一行でロード＆SRV作成
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2 = TextureManager::LoadTextureAndCreateSRV("Resources/monsterBall.png");
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU3 = TextureManager::LoadTextureAndCreateSRV("Resources/uvChecker.png");
 
+	// DepthStencil の構築処理は従来通り
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = kClientWidth;
 	resourceDesc.Height = kClientHeight;
@@ -425,97 +400,35 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
-
-
 #pragma region 全モデルデータの読み込み・リソース生成
 
-	struct ModelEntry {
-		std::string name;
-		std::string dir;
-		std::string file;
-		std::vector<RenderMeshInstance> instances;
-	};
+	// 2. ModelLoader の初期化
+	ModelLoader::Initialize(
+		device.Get(),
+		commandList,
+		textureSrvHandleGPU3 // デフォルトテクスチャSRV
+	);
 
-	std::vector<ModelEntry> modelEntries = {
-	{ "planeOBJ",         "Resources",              "plane.obj" },
-	{ "multiMaterialOBJ", "Resources/multiMaterial", "multiMaterial.obj" },
-	{ "multiMeshOBJ",     "Resources/multiMesh",     "multiMesh.obj" },
-	{ "teapotOBJ",        "Resources/teapot",        "teapot.obj" },
-	{ "bunnyOBJ",         "Resources/bunny",         "bunny.obj" },
-	{ "suzanneOBJ",       "Resources/suzanne",       "suzanne.obj" },
-	{ "playerOBJ",       "Resources/player",       "player.obj" },
-	};
+	// ModelLoader の初期化後などに ModelDraw を初期化
+	ModelDraw::Initialize(commandList, directionalLightResource);
 
-	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> loadedTextureResources;
+	// 3. モデル読み込み
+	std::vector<std::shared_ptr<Model>> modelEntries;
+	modelEntries.push_back(Model::CreateFromOBJ("suzanne", true));
+	modelEntries.push_back(Model::CreateFromOBJ("player", true));
+	modelEntries.push_back(Model::CreateFromOBJ("enemy", true));
+	modelEntries.push_back(Model::CreateFromOBJ("teapot", true));
+	modelEntries.push_back(Model::CreateFromOBJ("multiMaterial", true));
+	modelEntries.push_back(Model::CreateFromOBJ("bunny", true));
+	modelEntries.push_back(Model::CreateFromOBJ("multiMesh", true));
 
-	for (size_t modelIdx = 0; modelIdx < modelEntries.size(); ++modelIdx)
-	{
-		ModelData mData = LoadObjFile(modelEntries[modelIdx].dir, modelEntries[modelIdx].file);
-		for (size_t meshIdx = 0; meshIdx < mData.meshes.size(); ++meshIdx)
-		{
-			RenderMeshInstance inst;
-			inst.vertexCount = static_cast<UINT>(mData.meshes[meshIdx].vertices.size());
-			if (inst.vertexCount == 0) continue;
+	// 中央モデル/スプライト共有用 plane モデルの読み込み
+	std::shared_ptr<Model> planeModel = Model::CreateFromOBJ("plane", false);
 
-			// 頂点バッファ
-			inst.vertexResource = CreateBufferResource(device.Get(), sizeof(VertexData) * inst.vertexCount);
-			inst.vertexBufferView.BufferLocation = inst.vertexResource->GetGPUVirtualAddress();
-			inst.vertexBufferView.SizeInBytes = static_cast<UINT>(sizeof(VertexData) * inst.vertexCount);
-			inst.vertexBufferView.StrideInBytes = sizeof(VertexData);
-			VertexData* vData = nullptr;
-			inst.vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vData));
-			std::memcpy(vData, mData.meshes[meshIdx].vertices.data(), sizeof(VertexData) * inst.vertexCount);
-
-			// マテリアル定数バッファ (修正ポイント: Map処理を追加)
-			inst.materialResource = CreateBufferResource(device.Get(), sizeof(Material));
-			inst.materialResource->Map(0, nullptr, reinterpret_cast<void**>(&inst.materialData));
-			if (inst.materialData) {
-				inst.materialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-				inst.materialData->enableLighting = 2;
-				inst.materialData->uvTransform = MakeIdentity4x4();
-			}
-
-			// WVP定数バッファ
-			inst.wvpResource = CreateBufferResource(device.Get(), sizeof(TransformationMatrix));
-			inst.wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&inst.wvpData));
-			if (inst.wvpData) {
-				inst.wvpData->WVP = MakeIdentity4x4();
-				inst.wvpData->World = MakeIdentity4x4();
-			}
-
-			// テクスチャロード
-			D3D12_GPU_DESCRIPTOR_HANDLE gpuSrvHandle = textureSrvHandleGPU3; // デフォルト: uvChecker
-			std::string texPath = mData.meshes[meshIdx].material.textureFilePath;
-			if (!texPath.empty() && std::filesystem::exists(texPath))
-			{
-				DirectX::ScratchImage mTexImages = LoadTexture(texPath);
-				Microsoft::WRL::ComPtr<ID3D12Resource> tResource = CreateTextureResource(device.Get(), mTexImages.GetMetadata());
-				UploadTextureData(tResource.Get(), mTexImages, device.Get(), commandList);
-
-				gpuSrvHandle = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter);
-				D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-				srvDesc.Format = mTexImages.GetMetadata().format;
-				srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-				srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-				srvDesc.Texture2D.MipLevels = UINT(mTexImages.GetMetadata().mipLevels);
-				device.Get()->CreateShaderResourceView(tResource.Get(), &srvDesc, GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter++));
-
-				loadedTextureResources.push_back(tResource);
-			}
-
-			inst.defaultSrvGpuHandle = gpuSrvHandle;
-			inst.transform.translate = {
-				static_cast<float>(modelIdx) * 0.0f,
-				0.0f,
-				static_cast<float>(meshIdx) * 0.0f
-			};
-
-			modelEntries[modelIdx].instances.push_back(inst);
-		}
-	}
-
-	ModelData modelData = LoadObjFile("Resources", "plane.obj");
-	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU1 = modelEntries[0].instances.empty() ? textureSrvHandleGPU3 : modelEntries[0].instances[0].defaultSrvGpuHandle;
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU1 =
+		(modelEntries.empty() || modelEntries[0]->instances.empty())
+		? textureSrvHandleGPU3
+		: modelEntries[0]->instances[0].defaultSrvGpuHandle;
 
 #pragma endregion
 
@@ -525,17 +438,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	D3D12_GPU_DESCRIPTOR_HANDLE imguiSrvHandleGPU = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter++);
 
 #endif
-
-	ID3D12Resource* vertexResource = CreateBufferResource(device.Get(), sizeof(VertexData) * (modelData.meshes.empty() ? 0 : modelData.meshes[0].vertices.size()));
-	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
-	if (!modelData.meshes.empty()) {
-		vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
-		vertexBufferView.SizeInBytes = static_cast<UINT>(sizeof(VertexData) * modelData.meshes[0].vertices.size());
-		vertexBufferView.StrideInBytes = sizeof(VertexData);
-		VertexData* vertexData = nullptr;
-		vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
-		std::memcpy(vertexData, modelData.meshes[0].vertices.data(), sizeof(VertexData) * modelData.meshes[0].vertices.size());
-	}
 
 #pragma region Imguiの初期化
 
@@ -899,12 +801,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 					for (size_t mIdx = 0; mIdx < modelEntries.size(); ++mIdx)
 					{
 						ImGui::PushID(static_cast<int>(mIdx));
-						if (ImGui::TreeNode(modelEntries[mIdx].name.c_str()))
+						// modelEntries[mIdx]->name に変更
+						if (ImGui::TreeNode(modelEntries[mIdx]->name.c_str()))
 						{
-							for (size_t subIdx = 0; subIdx < modelEntries[mIdx].instances.size(); ++subIdx)
+							// modelEntries[mIdx]->instances に変更
+							for (size_t subIdx = 0; subIdx < modelEntries[mIdx]->instances.size(); ++subIdx)
 							{
 								ImGui::PushID(static_cast<int>(subIdx));
-								auto& inst = modelEntries[mIdx].instances[subIdx];
+								auto& inst = modelEntries[mIdx]->instances[subIdx];
 								std::string meshLabel = std::format("Mesh {}", subIdx);
 
 								if (ImGui::TreeNode(meshLabel.c_str()))
@@ -1158,7 +1062,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			// 全OBJモデルの行列・UV演算反映
 			for (auto& model : modelEntries)
 			{
-				for (auto& inst : model.instances)
+				// model->instances に変更
+				for (auto& inst : model->instances)
 				{
 					if (inst.materialData) {
 						inst.uvScale.x = inst.uiUVScale[0];
@@ -1223,33 +1128,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			// --- 全モデルの描画ループ ---
 			for (auto& model : modelEntries)
 			{
-				for (auto& inst : model.instances)
-				{
-					if (!inst.visible || inst.vertexCount == 0) { continue; }
-
-					D3D12_GPU_DESCRIPTOR_HANDLE drawTexHandle = inst.defaultSrvGpuHandle;
-					if (inst.textureIndex == 1) { drawTexHandle = textureSrvHandleGPU2; }
-					else if (inst.textureIndex == 2) { drawTexHandle = textureSrvHandleGPU3; }
-
-					commandList->SetGraphicsRootConstantBufferView(0, inst.materialResource->GetGPUVirtualAddress());
-					commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
-					commandList->SetGraphicsRootConstantBufferView(2, inst.wvpResource->GetGPUVirtualAddress());
-					commandList->SetGraphicsRootDescriptorTable(3, drawTexHandle);
-					commandList->IASetVertexBuffers(0, 1, &inst.vertexBufferView);
-					commandList->DrawInstanced(inst.vertexCount, 1, 0, 0);
-				}
+				Model::PreDraw();
+				model->Draw(); // または model->Draw(transform, debugCamera);
+				Model::PostDraw();
 			}
 
 			// --- 1. 中央モデルの描画（背景・互換用途） ---
-			if (showModel && !modelData.meshes.empty())
+			if (showModel && planeModel && !planeModel->instances.empty())
 			{
+				auto& inst = planeModel->instances[0];
 				D3D12_GPU_DESCRIPTOR_HANDLE currentTextureHandle = useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU1;
 				commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 				commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
 				commandList->SetGraphicsRootConstantBufferView(2, wvpResource->GetGPUVirtualAddress());
 				commandList->SetGraphicsRootDescriptorTable(3, currentTextureHandle);
-				commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
-				commandList->DrawInstanced(UINT(modelData.meshes[0].vertices.size()), 1, 0, 0);
+				commandList->IASetVertexBuffers(0, 1, &inst.vertexBufferView);
+				commandList->DrawInstanced(inst.vertexCount, 1, 0, 0);
 			}
 
 			// --- 2. 球（Sphere）の描画 ---
@@ -1272,8 +1166,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 			}
 
 			// --- 3. Sprite の描画 ---
-			if (showSprite && !modelData.meshes.empty())
+			if (showSprite && planeModel && !planeModel->instances.empty())
 			{
+				auto& inst = planeModel->instances[0];
+
 				D3D12_GPU_DESCRIPTOR_HANDLE currentSpriteTextureHandle = textureSrvHandleGPU3;
 				if (spriteTextureIndex == 1) {
 					currentSpriteTextureHandle = textureSrvHandleGPU2;
@@ -1286,8 +1182,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 				commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
 				commandList->SetGraphicsRootConstantBufferView(2, spriteWvpResource->GetGPUVirtualAddress());
 				commandList->SetGraphicsRootDescriptorTable(3, currentSpriteTextureHandle);
-				commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
-				commandList->DrawInstanced(UINT(modelData.meshes[0].vertices.size()), 1, 0, 0);
+				commandList->IASetVertexBuffers(0, 1, &inst.vertexBufferView);
+				commandList->DrawInstanced(inst.vertexCount, 1, 0, 0);
 			}
 
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);

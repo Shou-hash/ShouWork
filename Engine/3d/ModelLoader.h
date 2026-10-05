@@ -1,5 +1,6 @@
 #pragma once
 #include "Engine/Base/Common.h"
+#include "Engine/2d/TextureManager.h"
 #include <d3d12.h>
 #include <wrl.h>
 #include <string>
@@ -7,7 +8,8 @@
 #include <memory>
 #include <filesystem>
 
-// 描画用の個別メッシュインスタンス構造体
+class DebugCamera; // カメラの前方宣言
+
 struct RenderMeshInstance {
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource = nullptr;
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
@@ -31,45 +33,47 @@ struct RenderMeshInstance {
 	bool visible = true;
 };
 
-// 1つのOBJモデル全体を表すクラス
 class Model {
 public:
 	std::string name;
 	std::vector<RenderMeshInstance> instances;
 
-	// 簡単読み込み用静的関数
 	static std::shared_ptr<Model> CreateFromOBJ(const std::string& modelName, bool smoothing = true);
+
+	// --- 描画用関数の追加 ---
+	static void PreDraw();
+	static void PostDraw();
+
+	// 座標変換・カメラ指定で描画
+	void Draw(const struct Transform& transform, const DebugCamera& camera, D3D12_GPU_DESCRIPTOR_HANDLE overrideTexHandle = { 0 });
+	// 引数なし（既存の行列保持データで描画）
+	void Draw(D3D12_GPU_DESCRIPTOR_HANDLE overrideTexHandle = { 0 });
 };
 
-// モデルおよびテクスチャを統合ロード管理するクラス
 class ModelLoader
 {
 public:
-	// 初期化処理（デバイスやDescriptorHeapの登録）
+	// 初期化処理
 	static void Initialize(
 		ID3D12Device* device,
 		ID3D12GraphicsCommandList* commandList,
-		ID3D12DescriptorHeap* srvHeap,
-		UINT descriptorSize,
-		uint32_t& srvIndexCounter,
 		D3D12_GPU_DESCRIPTOR_HANDLE defaultTexHandle
 	);
 
-	// ディレクトリとファイル名を指定してOBJをロード
+	// OBJファイルを読み込む
 	static std::shared_ptr<Model> LoadOBJ(const std::string& directoryPath, const std::string& filename, const std::string& modelName = "");
 
-	// モデル名のみで "Resources/モデル名/モデル名.obj" または "Resources/モデル名.obj" を読み込む簡易関数
+	// モデル名簡易読み込み
 	static std::shared_ptr<Model> CreateFromOBJ(const std::string& modelName, bool smoothing = true);
 
-	// テクスチャロード処理の内部共通関数
+	// テクスチャロード（TextureManagerへ委託）
 	static D3D12_GPU_DESCRIPTOR_HANDLE LoadTextureAndCreateSRV(const std::string& filePath);
+
+	// 解放処理
+	static void Finalize();
 
 private:
 	static ID3D12Device* sDevice_;
 	static ID3D12GraphicsCommandList* sCommandList_;
-	static ID3D12DescriptorHeap* sSrvHeap_;
-	static UINT sDescriptorSize_;
-	static uint32_t sSrvIndexCounter_;
 	static D3D12_GPU_DESCRIPTOR_HANDLE sDefaultTextureSrvHandleGPU_;
-	static std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> sLoadedTextureResources_;
 };
