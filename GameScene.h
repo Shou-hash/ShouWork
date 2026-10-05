@@ -26,7 +26,10 @@ private:
 	BYTE keyPre[256] = {};
 	ResourceObject<IDirectInput8> directInput;
 	ResourceObject<IDirectInputDevice8> keyboard;
-	DirectInput gamePad;
+
+	// 実体ではなくポインタに変更
+	DirectInput* gamePad = nullptr;
+
 	DebugCamera debugCamera;
 	Sound* soundManager = nullptr;
 	Sound::SoundData soundData;

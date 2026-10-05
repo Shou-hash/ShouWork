@@ -16,6 +16,9 @@ GameScene::~GameScene() {
 	if (soundManager) {
 		soundManager->SoundUnload(&soundData);
 	}
+	// 動的破棄
+	delete gamePad;
+	gamePad = nullptr;
 }
 
 void GameScene::Initialize(ID3D12Device* device, ID3D12GraphicsCommandList* commandList, HWND hwnd, HINSTANCE hInstance) {
@@ -53,6 +56,10 @@ void GameScene::InitializeInput(HWND hwnd, HINSTANCE hInstance) {
 	hr = keyboard->SetCooperativeLevel(
 		hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
 	assert(SUCCEEDED(hr));
+
+	// new による動的生成と初期化関数の呼出し
+	gamePad = new DirectInput();
+	gamePad->Initialize();
 }
 
 void GameScene::InitializeResources(ID3D12Device* device, ID3D12GraphicsCommandList* commandList) {
@@ -178,10 +185,13 @@ void GameScene::Update() {
 	}
 
 	// ゲームパッド更新
-	gamePad.Update();
-	Vector2 lStick = gamePad.GetLeftStick();
-	transform.translate.x += lStick.x * 0.1f;
-	transform.translate.y += lStick.y * 0.1f;
+	// アロー演算子 (->) で呼び出し
+	if (gamePad) {
+		gamePad->Update();
+		Vector2 lStick = gamePad->GetLeftStick();
+		transform.translate.x += lStick.x * 0.1f;
+		transform.translate.y += lStick.y * 0.1f;
+	}
 
 	// ImGui更新
 	DrawImGui();

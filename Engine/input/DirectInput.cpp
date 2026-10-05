@@ -1,6 +1,14 @@
 #include "DirectInput.h"
 #include <cmath>
 
+void DirectInput::Initialize(DWORD userIndex)
+{
+	userIndex_ = userIndex;
+	state_ = {};
+	statePre_ = {};
+	isConnected_ = false;
+}
+
 void DirectInput::Update()
 {
 	// 前フレームの状態を保存

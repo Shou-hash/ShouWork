@@ -12,6 +12,9 @@ public:
 	DirectInput() = default;
 	~DirectInput() = default;
 
+	// 初期化処理関数を追加
+	void Initialize(DWORD userIndex = 0);
+
 	// 毎フレーム呼ぶ更新処理
 	void Update();
 
