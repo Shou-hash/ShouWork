@@ -1,4 +1,8 @@
 #pragma once
+
+// =========================================================
+// 1. Windows / Standard Libraries
+// =========================================================
 #include <Windows.h>
 #include <cstdint>
 #include <string>
@@ -6,34 +10,38 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
-#include <d3d12.h>
-#include <dxgi1_6.h>
+#include <numbers>
+#include <vector>
+#include <memory>
 #include <cassert>
 #include <dbghelp.h>
 #include <strsafe.h>
+#include <wrl.h>
+
+// =========================================================
+// 2. DirectX / Audio / DirectInput Libraries
+// =========================================================
+#include <d3d12.h>
+#include <dxgi1_6.h>
 #include <dxgidebug.h>
 #include <dxcapi.h>
 #include <xaudio2.h>
-#include "externals/DirectXTex/d3dx12.h"
 
-#include "ConvertString.h"
-#include "Engine/math/Matrix4x4.h"
-#include "Engine/2d/ImguiCode.h"
-#include "externals/DirectXTex/DirectXTex.h"
-
-#pragma comment(lib, "xaudio2.lib")
-#pragma comment(lib, "d3dcompiler.lib")
-#pragma comment(lib, "dxguid.lib")
-#pragma comment(lib, "Dbghelp.lib")
-#pragma comment(lib, "dxcompiler.lib")
-#pragma comment(lib, "d3d12.lib")
-#pragma comment(lib, "dxgi.lib")
-
-#define DIRECTINPUT_VERSION 0x0800 // DirectInputのバージョン指定
+#define DIRECTINPUT_VERSION 0x0800
 #include <dinput.h>
 
-#pragma comment(lib, "dinput8.lib")
+#include "externals/DirectXTex/d3dx12.h"
+#include "externals/DirectXTex/DirectXTex.h"
 
+// =========================================================
+// 3. 基本的な型・算術ヘッダーの読み込み
+// =========================================================
+#include "ConvertString.h"
+#include "Engine/math/Matrix4x4.h"
+
+// =========================================================
+// 4. 各種構造体の定義（Engineライブラリ群より前に配置！）
+// =========================================================
 struct Vector4 {
 	float x, y, z, w;
 };
@@ -50,7 +58,6 @@ struct Transform
 	Vector3 translate;
 };
 
-// 頂点データ構造体の定義をトップレベルに移動
 struct VertexData {
 	Vector4 position;
 	float u, v;
@@ -100,6 +107,32 @@ struct ModelData
 	MaterialData material;
 	std::vector<MeshData> meshes;
 };
+
+// =========================================================
+// 5. 上記の構造体を使用する Engine ライブラリ群のインクルード
+// =========================================================
+#include "Engine/2d/ImguiCode.h"
+#include "Engine/Base/WinApp.h"
+#include "Engine/Base/DirectXCommon.h"
+#include "Engine/Base/ResourceObject.h"
+#include "Engine/Audio/Sound.h"
+#include "Engine/3d/DebugCamera.h"
+#include "Engine/input/DirectInput.h"
+#include "Engine/3d/ModelLoader.h"
+#include "Engine/2d/TextureManager.h"
+#include "Engine/3d/ModelDraw.h"
+
+// =========================================================
+// 6. Pragma comments & 関数プロトタイプ宣言
+// =========================================================
+#pragma comment(lib, "xaudio2.lib")
+#pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "Dbghelp.lib")
+#pragma comment(lib, "dxcompiler.lib")
+#pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "dinput8.lib")
 
 ID3D12Resource* UploadTextureData(
 	ID3D12Resource* texture,

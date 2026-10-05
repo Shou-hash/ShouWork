@@ -15,7 +15,7 @@ public:
     /// <summary>
     /// 更新
     /// </summary>
-    void Update();
+    void Update(const BYTE* key);
 
     // ゲッター
     const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }

@@ -15,7 +15,7 @@ void DebugCamera::Initialize()
     projectionMatrix_ = MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
 }
 
-void DebugCamera::Update()
+void DebugCamera::Update(const BYTE* key)
 {
     // ==========================================
     // 1. 入力によるカメラの移動や回転
