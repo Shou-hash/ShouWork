@@ -101,4 +101,9 @@ private:
 	// カメラ行列
 	Matrix4x4 viewMatrix;
 	Matrix4x4 projectionMatrix;
+
+	// ★【変更】全体共通変数を削除し、各描画オブジェクト用のブレンドモード変数を追加
+	BlendMode planeBlendMode_ = kBlendModeNormal;  // 中央モデル (Plane) 用
+	BlendMode sphereBlendMode_ = kBlendModeNormal; // 球体 (Sphere) 用
+	BlendMode spriteBlendMode_ = kBlendModeNormal; // スプライト (Sprite) 用
 };

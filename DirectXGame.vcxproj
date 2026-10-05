@@ -143,6 +143,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="Engine\3d\ModelDraw.cpp" />
     <ClCompile Include="Engine\3d\ModelLoader.cpp" />
     <ClCompile Include="Engine\audio\Sound.cpp" />
+    <ClCompile Include="Engine\base\BlendManager.cpp" />
     <ClCompile Include="Engine\base\ConvertString.cpp" />
     <ClCompile Include="Engine\base\DirectXCommon.cpp" />
     <ClCompile Include="Engine\base\ResourceObject.cpp" />
@@ -190,6 +191,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\3d\ModelDraw.h" />
     <ClInclude Include="Engine\3d\ModelLoader.h" />
     <ClInclude Include="Engine\audio\Sound.h" />
+    <ClInclude Include="Engine\base\BlendManager.h" />
     <ClInclude Include="Engine\base\Common.h" />
     <ClInclude Include="Engine\base\ConvertString.h" />
     <ClInclude Include="Engine\base\DirectXCommon.h" />

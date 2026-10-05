@@ -121,6 +121,7 @@ struct ModelData
 #include "Engine/3d/ModelLoader.h"
 #include "Engine/2d/TextureManager.h"
 #include "Engine/3d/ModelDraw.h"
+#include "Engine/Base/BlendManager.h"
 
 // =========================================================
 // 6. Pragma comments & 関数プロトタイプ宣言

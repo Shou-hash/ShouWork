@@ -1,5 +1,6 @@
 #pragma once
 #include "Engine/Base/Common.h"
+#include "Engine/Base/BlendManager.h"
 #include "Engine/2d/TextureManager.h"
 #include <d3d12.h>
 #include <wrl.h>
@@ -31,6 +32,9 @@ struct RenderMeshInstance {
 	int textureIndex = 0;
 	D3D12_GPU_DESCRIPTOR_HANDLE defaultSrvGpuHandle{};
 	bool visible = true;
+
+	// ★【追加】各インスタンスごとのブレンドモード（初期値は通常α）
+	BlendMode blendMode = kBlendModeNormal;
 };
 
 class Model {

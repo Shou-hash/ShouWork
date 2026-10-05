@@ -284,6 +284,16 @@ void GameScene::DrawImGui() {
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
+	// ★コンボボックス用のブレンドモード名リスト
+	static const char* blendModeNames[] = {
+		"None (なし)",
+		"Normal (通常α)",
+		"Add (加算)",
+		"Subtract (減算)",
+		"Multiply (乗算)",
+		"Screen (スクリーン)"
+	};
+
 	ImGui::Begin("Scene Control Panel");
 	if (ImGui::BeginTabBar("SceneControlTabBar")) {
 		// 0. Sound
@@ -319,6 +329,13 @@ void GameScene::DrawImGui() {
 
 						if (ImGui::TreeNode(meshLabel.c_str())) {
 							ImGui::Checkbox("Visible", &inst.visible);
+
+							// ★【追加】OBJモデル インスタンスごとの Blend Mode UI
+							int instBlendIdx = static_cast<int>(inst.blendMode);
+							if (ImGui::Combo("Blend Mode", &instBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {
+								inst.blendMode = static_cast<BlendMode>(instBlendIdx);
+							}
+
 							if (inst.materialData && ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
 								ImGui::ColorEdit4("Material Color", &inst.materialData->color.x);
 								int instLighting = inst.materialData->enableLighting;
@@ -356,6 +373,13 @@ void GameScene::DrawImGui() {
 		if (ImGui::BeginTabItem("Central Model")) {
 			ImGui::Checkbox("Show Central Model", &showModel);
 			if (showModel) {
+				
+				// ★【追加】中央モデル用 Blend Mode UI
+				int planeBlendIdx = static_cast<int>(planeBlendMode_);
+				if (ImGui::Combo("Blend Mode", &planeBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {
+					planeBlendMode_ = static_cast<BlendMode>(planeBlendIdx);
+				}
+
 				const char* lightingTypes[] = { "None (0)", "Lambert (1)", "Half Lambert (2)" };
 				if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
 					ImGui::ColorEdit4("Material Color", &materialData->color.x);
@@ -381,6 +405,12 @@ void GameScene::DrawImGui() {
 		if (ImGui::BeginTabItem("Sphere")) {
 			ImGui::Checkbox("Show Sphere", &showSphere);
 			if (showSphere) {
+				// ★【追加】球体用 Blend Mode UI
+				int sphereBlendIdx = static_cast<int>(sphereBlendMode_);
+				if (ImGui::Combo("Blend Mode", &sphereBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {
+					sphereBlendMode_ = static_cast<BlendMode>(sphereBlendIdx);
+				}
+
 				const char* lightingTypes[] = { "None (0)", "Lambert (1)", "Half Lambert (2)" };
 				if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
 					ImGui::ColorEdit4("Material Color", &sphereMaterialData->color.x);
@@ -409,6 +439,13 @@ void GameScene::DrawImGui() {
 		if (ImGui::BeginTabItem("Sprite")) {
 			ImGui::Checkbox("Show Sprite", &showSprite);
 			if (showSprite) {
+				
+				// ★【追加】スプライト用 Blend Mode UI
+				int spriteBlendIdx = static_cast<int>(spriteBlendMode_);
+				if (ImGui::Combo("Blend Mode", &spriteBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {
+					spriteBlendMode_ = static_cast<BlendMode>(spriteBlendIdx);
+				}
+
 				if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
 					ImGui::ColorEdit4("Material Color", &spriteMaterialData->color.x);
 					const char* lightingTypes[] = { "None (0)", "Lambert (1)", "Half Lambert (2)" };
@@ -443,6 +480,7 @@ void GameScene::DrawImGui() {
 }
 
 void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
+
 	// OBJモデル群の描画
 	for (auto& model : modelEntries) {
 		Model::PreDraw();
@@ -452,6 +490,9 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 
 	// 1. 中央モデル (Plane) の描画
 	if (showModel && planeModel && !planeModel->instances.empty()) {
+		// ★中央モデル描画直前にパイプラインをセット
+		BlendManager::GetInstance()->SetPipelineState(commandList, planeBlendMode_);
+
 		auto& inst = planeModel->instances[0];
 		D3D12_GPU_DESCRIPTOR_HANDLE currentTextureHandle = useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU1;
 		commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
@@ -464,6 +505,9 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 
 	// 2. 球 (Sphere) の描画
 	if (showSphere) {
+		// ★球体描画直前にパイプラインをセット
+		BlendManager::GetInstance()->SetPipelineState(commandList, sphereBlendMode_);
+
 		D3D12_GPU_DESCRIPTOR_HANDLE currentSphereTextureHandle = textureSrvHandleGPU3;
 		if (sphereTextureIndex == 1) {
 			currentSphereTextureHandle = textureSrvHandleGPU2;
@@ -482,6 +526,9 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 
 	// 3. Sprite の描画
 	if (showSprite && planeModel && !planeModel->instances.empty()) {
+		// ★スプライト描画直前にパイプラインをセット
+		BlendManager::GetInstance()->SetPipelineState(commandList, spriteBlendMode_);
+
 		auto& inst = planeModel->instances[0];
 		D3D12_GPU_DESCRIPTOR_HANDLE currentSpriteTextureHandle = textureSrvHandleGPU3;
 		if (spriteTextureIndex == 1) {

@@ -36,14 +36,18 @@ PixelShaderOutput main(VertexShaderOutput input)
         float32_t NdotL = dot(normalize(input.normal), -normalize(gDirectionalLight.direction));
         float32_t lambert = max(NdotL, 0.0f);
         
-        output.color = gMaterial.color * textureColor * gDirectionalLight.color * lambert * gDirectionalLight.intensity;
+        // RGB（カラー）とAlpha（透明度）の計算を分離する
+        output.color.rgb = gMaterial.color.rgb * textureColor.rgb * gDirectionalLight.color.rgb * lambert * gDirectionalLight.intensity;
+        output.color.a = gMaterial.color.a * textureColor.a;
     }
     else if (gMaterial.enableLighting == 2) // Half Lambert
     {
         float32_t NdotL = dot(normalize(input.normal), -normalize(gDirectionalLight.direction));
         float32_t halfLambert = pow(NdotL * 0.5f + 0.5f, 2.0f);
         
-        output.color = gMaterial.color * textureColor * gDirectionalLight.color * halfLambert * gDirectionalLight.intensity;
+        // RGB（カラー）とAlpha（透明度）の計算を分離する
+        output.color.rgb = gMaterial.color.rgb * textureColor.rgb * gDirectionalLight.color.rgb * halfLambert * gDirectionalLight.intensity;
+        output.color.a = gMaterial.color.a * textureColor.a;
     }
     else // 0: Lighting なし
     {
