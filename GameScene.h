@@ -11,7 +11,7 @@ public:
 	void Update();
 	void Draw(ID3D12GraphicsCommandList* commandList);
 
-private:
+public:
 	// 内部初期化処理
 	void InitializeInput(HWND hwnd, HINSTANCE hInstance);
 	void InitializeResources(ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
@@ -21,11 +21,8 @@ private:
 	void DrawImGui();
 
 private:
-	// 入力・サウンド・カメラ
-	BYTE key[256] = {};
-	BYTE keyPre[256] = {};
-	ResourceObject<IDirectInput8> directInput;
-	ResourceObject<IDirectInputDevice8> keyboard;
+	// ★ Key関連変数を削除し、Inputクラスのポインタを管理
+	std::unique_ptr<Input> input_ = nullptr;
 
 	// 実体ではなくポインタに変更
 	DirectInput* gamePad = nullptr;

@@ -1,6 +1,8 @@
 #pragma once
 #include "Common.h"
 
+class Input; // 前方宣言
+
 /// <summary>
 /// デバッグカメラ
 /// </summary>
@@ -15,7 +17,7 @@ public:
     /// <summary>
     /// 更新
     /// </summary>
-    void Update(const BYTE* key);
+    void Update(const Input* input);
 
     // ゲッター
     const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }

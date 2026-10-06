@@ -1,22 +1,10 @@
 #include "GameScene.h"
 
-// キー入力判定関数
-static bool IsPushKey(uint8_t keyNumber, const BYTE* key) {
-	return key[keyNumber] != 0;
-}
-
-static bool IsTriggerKey(uint8_t keyNumber, const BYTE* key, const BYTE* keyPre) {
-	return (key[keyNumber] && !keyPre[keyNumber]);
-}
-
 GameScene::~GameScene() {
-	if (keyboard) {
-		keyboard->Unacquire();
-	}
+	// keyboard->Unacquire() などの処理は Input クラスのデストラクタ / 解放処理に任せる
 	if (soundManager) {
 		soundManager->SoundUnload(&soundData);
 	}
-	// 動的破棄
 	delete gamePad;
 	gamePad = nullptr;
 }
@@ -31,35 +19,19 @@ void GameScene::Initialize(ID3D12Device* device, ID3D12GraphicsCommandList* comm
 	// デバッグカメラの初期化
 	debugCamera.Initialize();
 
-	// 入力の初期化
-	InitializeInput(hwnd, hInstance);
+	// ★ Inputクラスの生成と初期化
+	input_ = std::make_unique<Input>();
+	input_->Initialize(hInstance, hwnd);
+
+	// XInputパッドの初期化
+	gamePad = new DirectInput();
+	gamePad->Initialize();
 
 	// 各種バッファ・テクスチャ・モデルの読み込み
 	InitializeResources(device, commandList);
 
 	// 球体モデルデータの生成
 	InitializeSphere(device);
-}
-
-void GameScene::InitializeInput(HWND hwnd, HINSTANCE hInstance) {
-	HRESULT hr = DirectInput8Create(
-		hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
-		(void**)directInput.GetAddressOf(), nullptr);
-	assert(SUCCEEDED(hr));
-
-	hr = directInput->CreateDevice(GUID_SysKeyboard, keyboard.GetAddressOf(), NULL);
-	assert(SUCCEEDED(hr));
-
-	hr = keyboard->SetDataFormat(&c_dfDIKeyboard);
-	assert(SUCCEEDED(hr));
-
-	hr = keyboard->SetCooperativeLevel(
-		hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
-	assert(SUCCEEDED(hr));
-
-	// new による動的生成と初期化関数の呼出し
-	gamePad = new DirectInput();
-	gamePad->Initialize();
 }
 
 void GameScene::InitializeResources(ID3D12Device* device, ID3D12GraphicsCommandList* commandList) {
@@ -168,18 +140,16 @@ void GameScene::InitializeSphere(ID3D12Device* device) {
 }
 
 void GameScene::Update() {
-	// キーボード状態の更新
-	std::memcpy(keyPre, key, sizeof(key));
-	keyboard->Acquire();
-	keyboard->GetDeviceState(sizeof(key), key);
+	// ★ キーボード状態の更新
+	input_->Update();
 
-	// デバッグカメラ切り替え判定
-	if (IsTriggerKey(DIK_TAB, key, keyPre)) {
+	// ★ デバッグカメラ切り替え判定 (TriggerKeyメンバ関数を使用)
+	if (input_->TriggerKey(DIK_TAB)) {
 		isDebugCamera = !isDebugCamera;
 	}
 
 	if (isDebugCamera) {
-		debugCamera.Update(key); // 引数に key を渡す
+		debugCamera.Update(input_.get()); // 引数に input_ を渡す
 		viewMatrix = debugCamera.GetViewMatrix();
 		projectionMatrix = debugCamera.GetProjectionMatrix();
 	}
