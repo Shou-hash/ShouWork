@@ -30,6 +30,13 @@ PixelShaderOutput main(VertexShaderOutput input)
     // 変換後のUV座標（xy）を使ってテクスチャをサンプリング
     float32_t4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
     
+    // ★【2値抜き (Binary Alpha) 処理】
+    // テクスチャのアルファ値が 0.5 以下のピクセルは棄却（Depthの書き込みも行われない）
+    if (textureColor.a <= 0.5f)
+    {
+        discard;
+    }
+    
     // === Lighting方式の分岐 ===
     if (gMaterial.enableLighting == 1) // Lambert
     {

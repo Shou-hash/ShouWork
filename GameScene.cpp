@@ -72,6 +72,8 @@ void GameScene::InitializeResources(ID3D12Device* device, ID3D12GraphicsCommandL
 	modelEntries.push_back(Model::CreateFromOBJ("bunny", true));
 	modelEntries.push_back(Model::CreateFromOBJ("multiMesh", true));
 
+	modelEntries.push_back(Model::CreateFromOBJ("fence", true));
+
 	planeModel = Model::CreateFromOBJ("plane", false);
 
 	textureSrvHandleGPU1 = (modelEntries.empty() || modelEntries[0]->instances.empty())
