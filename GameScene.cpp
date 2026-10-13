@@ -9,7 +9,22 @@ GameScene::~GameScene() {
 	gamePad = nullptr;
 }
 
-void GameScene::Initialize(ID3D12Device* device, ID3D12GraphicsCommandList* commandList, HWND hwnd, HINSTANCE hInstance) {
+void GameScene::Initialize(
+	ID3D12Device* device,
+	ID3D12GraphicsCommandList* commandList,
+	HWND hwnd,
+	HINSTANCE hInstance,
+	ID3D12DescriptorHeap* srvDescriptorHeap,
+	UINT descriptorSize,
+	uint32_t& srvIndexCounter,
+	IDxcUtils* dxcUtils,
+	IDxcCompiler3* dxcCompiler,
+	IDxcIncludeHandler* dxcIncludeHandler,
+	ID3D12RootSignature* rootSignature
+) {
+
+	rootSignature_ = rootSignature; // ★ 保持
+
 	// サウンドの初期化
 	soundManager = Sound::GetInstance();
 	soundManager->Initialize();
@@ -32,6 +47,10 @@ void GameScene::Initialize(ID3D12Device* device, ID3D12GraphicsCommandList* comm
 
 	// 球体モデルデータの生成
 	InitializeSphere(device);
+
+	// ★ Particleクラスの生成・初期化
+	particle_ = std::make_unique<Particle>();
+	particle_->Initialize(device, srvDescriptorHeap, descriptorSize, srvIndexCounter, dxcUtils, dxcCompiler, dxcIncludeHandler);
 }
 
 void GameScene::InitializeResources(ID3D12Device* device, ID3D12GraphicsCommandList* commandList) {
@@ -167,6 +186,12 @@ void GameScene::Update() {
 
 	// ImGui更新
 	DrawImGui();
+
+	// ★ Particleの更新
+	if (particle_ && showParticles) {
+		Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
+		particle_->Update(viewProjectionMatrix);
+	}
 
 	// Transform & 行列計算の更新
 	transform.rotate.x = sphereRotate[0] * (std::numbers::pi_v<float> / 180.0f);
@@ -444,6 +469,16 @@ void GameScene::DrawImGui() {
 			ImGui::EndTabItem();
 		}
 
+		// 6. Particle
+		if (ImGui::BeginTabItem("Particle")) {
+			ImGui::Checkbox("Show Particle", &showParticles);
+			if (showParticles && particle_) {
+				// ★【追加】Particle クラス内の ImGui コントロールを呼び出し
+				particle_->DrawImGui();
+			}
+			ImGui::EndTabItem();
+		}
+
 		ImGui::EndTabBar();
 	}
 	ImGui::End();
@@ -496,9 +531,16 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 		commandList->DrawInstanced(static_cast<UINT>(sphereVertices.size()), 1, 0, 0);
 	}
 
-	// 3. Sprite の描画
+	// 3. ★【Particleの描画】
+	if (particle_ && showParticles) {
+		particle_->Draw(commandList, textureSrvHandleGPU3);
+
+		// ★ Particle専用RootSignatureから共通RootSignatureへ復元！
+		commandList->SetGraphicsRootSignature(rootSignature_);
+	}
+
+	// 4. Sprite の描画
 	if (showSprite && planeModel && !planeModel->instances.empty()) {
-		// ★スプライト描画直前にパイプラインをセット
 		BlendManager::GetInstance()->SetPipelineState(commandList, spriteBlendMode_);
 
 		auto& inst = planeModel->instances[0];
@@ -513,7 +555,7 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 		commandList->SetGraphicsRootConstantBufferView(0, spriteMaterialResource->GetGPUVirtualAddress());
 		commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
 		commandList->SetGraphicsRootConstantBufferView(2, spriteWvpResource->GetGPUVirtualAddress());
-		commandList->SetGraphicsRootDescriptorTable(3, currentSpriteTextureHandle);
+		commandList->SetGraphicsRootDescriptorTable(3, currentSpriteTextureHandle); // 正常にセット可能になります
 		commandList->IASetVertexBuffers(0, 1, &inst.vertexBufferView);
 		commandList->DrawInstanced(inst.vertexCount, 1, 0, 0);
 	}

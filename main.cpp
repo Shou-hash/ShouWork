@@ -274,7 +274,19 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	// GameSceneの作成と初期化
 	std::unique_ptr<GameScene> gameScene = std::make_unique<GameScene>();
-	gameScene->Initialize(device.Get(), commandList, hwnd, hInstance);
+	gameScene->Initialize(
+		device.Get(),
+		commandList,
+		hwnd,
+		hInstance,
+		srvDescriptorHeap.Get(),
+		descriptorSize,
+		srvIndexCounter,
+		dxcUtils,
+		dxcCompiler,
+		dxcIncludeHandler,
+		rootSignature
+	);
 
 	hr = commandList->Close();
 	assert(SUCCEEDED(hr));

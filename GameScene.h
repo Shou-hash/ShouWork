@@ -7,7 +7,19 @@ public:
 	~GameScene();
 
 	// 初期化・更新・描画
-	void Initialize(ID3D12Device* device, ID3D12GraphicsCommandList* commandList, HWND hwnd, HINSTANCE hInstance);
+	void Initialize(
+		ID3D12Device* device, 
+		ID3D12GraphicsCommandList* commandList, 
+		HWND hwnd, 
+		HINSTANCE hInstance,
+		ID3D12DescriptorHeap* srvDescriptorHeap,
+		UINT descriptorSize,
+		uint32_t& srvIndexCounter,
+		IDxcUtils* dxcUtils,
+		IDxcCompiler3* dxcCompiler,
+		IDxcIncludeHandler* dxcIncludeHandler,
+		ID3D12RootSignature* rootSignature
+	);
 	void Update();
 	void Draw(ID3D12GraphicsCommandList* commandList);
 
@@ -21,6 +33,9 @@ public:
 	void DrawImGui();
 
 private:
+	// ★ 共通 RootSignature 保持用ポインタを追加
+	ID3D12RootSignature* rootSignature_ = nullptr;
+
 	// ★ Key関連変数を削除し、Inputクラスのポインタを管理
 	std::unique_ptr<Input> input_ = nullptr;
 
@@ -31,6 +46,10 @@ private:
 	Sound* soundManager = nullptr;
 	Sound::SoundData soundData;
 	bool isDebugCamera = false;
+
+	// ★ Particle クラスのインスタンス
+	std::unique_ptr<Particle> particle_ = nullptr;
+	bool showParticles = true;
 
 	// ライト
 	Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource;

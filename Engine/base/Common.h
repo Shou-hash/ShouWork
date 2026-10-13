@@ -123,6 +123,7 @@ struct ModelData
 #include "Engine/3d/ModelDraw.h"
 #include "Engine/Base/BlendManager.h"
 #include "Engine/Input/Input.h"
+#include "Engine/Base/Particle.h"
 
 // =========================================================
 // 6. Pragma comments & 関数プロトタイプ宣言
