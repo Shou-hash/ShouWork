@@ -111,6 +111,7 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU1{};
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2{};
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU3{};
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleCircle{}; // ★ circle.png 用の SRV ハンドルを追加
 	std::vector<std::shared_ptr<Model>> modelEntries;
 	std::shared_ptr<Model> planeModel;
 

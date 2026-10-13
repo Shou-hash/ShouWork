@@ -1,5 +1,22 @@
 #pragma once
 #include "Common.h"
+#include <random>
+
+// ★ GPUに転送するデータ構造体
+struct ParticleForGPU {
+	Matrix4x4 WVP;
+	Matrix4x4 World;
+	Vector4 color;
+};
+
+// ★ Particle構造体（CPU側で動かす挙動に関するデータ）
+struct ParticleData {
+	struct Transform transform;
+	Vector3 velocity;
+	Vector4 color;
+	float lifeTime;
+	float currentTime;
+};
 
 // =========================================================
 // Particle クラス（Instancing描画管理）
@@ -7,8 +24,8 @@
 class Particle
 {
 public:
-	// インスタンス数（スクショ資料に従い10個）
-	static const uint32_t kNumInstance = 10;
+	// ★ 最大インスタンス数（資料に従い kNumMaxInstance に変更）
+	static const uint32_t kNumMaxInstance = 10;
 
 	Particle() = default;
 	~Particle() = default;
@@ -30,8 +47,11 @@ public:
 	// 描画
 	void Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU);
 
-	// ★【追加】ImGui描画
+	// ImGui描画
 	void DrawImGui();
+
+	// 新しい Particle を生成する関数
+	ParticleData MakeNewParticle(std::mt19937& randomEngine);
 
 private:
 	// Particle専用の RootSignature と PipelineState の作成
@@ -53,14 +73,21 @@ private:
 
 	// インスタンシングバッファ (StructuredBuffer)
 	Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_;
-	TransformationMatrix* instancingData_ = nullptr;
+	ParticleForGPU* instancingData_ = nullptr;
 
 	// SRV用ハンドル
 	D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU_{};
 	D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_{};
 
-	// インスタンスごとの Transform 情報
-	struct Transform transforms_[kNumInstance];
+	// インスタンスごとの Particle 情報
+	ParticleData particles_[kNumMaxInstance];
+
+	// ★ 実際に描画すべきインスタンス数
+	uint32_t numInstance_ = 0;
+
+	// 乱数生成器
+	std::random_device seedGenerator_;
+	std::mt19937 randomEngine_;
 
 	// Particle用パイプライン設定
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;

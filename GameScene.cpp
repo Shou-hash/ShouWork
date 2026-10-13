@@ -77,6 +77,7 @@ void GameScene::InitializeResources(ID3D12Device* device, ID3D12GraphicsCommandL
 	// テクスチャ読み込み
 	textureSrvHandleGPU2 = TextureManager::LoadTextureAndCreateSRV("Resources/monsterBall.png");
 	textureSrvHandleGPU3 = TextureManager::LoadTextureAndCreateSRV("Resources/uvChecker.png");
+	textureSrvHandleCircle = TextureManager::LoadTextureAndCreateSRV("Resources/circle.png"); // ★ circle.png を読み込み
 
 	// ModelLoader & ModelDraw の初期化
 	ModelLoader::Initialize(device, commandList, textureSrvHandleGPU3);
@@ -533,7 +534,7 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 
 	// 3. ★【Particleの描画】
 	if (particle_ && showParticles) {
-		particle_->Draw(commandList, textureSrvHandleGPU3);
+		particle_->Draw(commandList, textureSrvHandleCircle); // ★ circle.png の SRV ハンドルを渡す
 
 		// ★ Particle専用RootSignatureから共通RootSignatureへ復元！
 		commandList->SetGraphicsRootSignature(rootSignature_);

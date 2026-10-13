@@ -1,5 +1,22 @@
 #include "Particle.h"
 
+// 新しい Particle を生成する関数
+ParticleData Particle::MakeNewParticle(std::mt19937& randomEngine) {
+	std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
+	std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
+	std::uniform_real_distribution<float> distTime(1.0f, 3.0f);
+
+	ParticleData particle;
+	particle.transform.scale = { 1.0f, 1.0f, 1.0f };
+	particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+	particle.transform.translate = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
+	particle.velocity = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
+	particle.color = { distColor(randomEngine), distColor(randomEngine), distColor(randomEngine), 1.0f };
+	particle.lifeTime = distTime(randomEngine);
+	particle.currentTime = 0.0f;
+	return particle;
+}
+
 void Particle::Initialize(
 	ID3D12Device* device,
 	ID3D12DescriptorHeap* srvDescriptorHeap,
@@ -9,11 +26,13 @@ void Particle::Initialize(
 	IDxcCompiler3* dxcCompiler,
 	IDxcIncludeHandler* dxcIncludeHandler
 ) {
+	// 乱数生成器の初期化
+	randomEngine_ = std::mt19937(seedGenerator_());
+
 	// 1. Particle用 RootSignature & PSO の構築
 	CreateRootSignatureAndPSO(device, dxcUtils, dxcCompiler, dxcIncludeHandler);
 
 	// 2. 頂点データ (四角形プリミティブ: 6頂点) の作成
-	// ★ Common.h の VertexData 構造体 (position, u, v, normal) に合わせて u, v を個別指定に修正
 	std::vector<VertexData> vertices = {
 		{ {  0.5f,  0.5f, 0.0f, 1.0f }, 0.0f, 0.0f, { 0.0f, 0.0f, 1.0f } }, // 左上
 		{ { -0.5f,  0.5f, 0.0f, 1.0f }, 1.0f, 0.0f, { 0.0f, 0.0f, 1.0f } }, // 右上
@@ -39,14 +58,9 @@ void Particle::Initialize(
 	materialData_->enableLighting = 0;
 	materialData_->uvTransform = MakeIdentity4x4();
 
-	// 4. Instancing用 TransformationMatrix (StructuredBuffer) リソースの作成
-	instancingResource_ = CreateBufferResource(device, sizeof(TransformationMatrix) * kNumInstance);
+	// 4. Instancing用 ParticleForGPU (StructuredBuffer) リソースの作成
+	instancingResource_ = CreateBufferResource(device, sizeof(ParticleForGPU) * kNumMaxInstance);
 	instancingResource_->Map(0, nullptr, reinterpret_cast<void**>(&instancingData_));
-
-	for (uint32_t index = 0; index < kNumInstance; ++index) {
-		instancingData_[index].WVP = MakeIdentity4x4();
-		instancingData_[index].World = MakeIdentity4x4();
-	}
 
 	// 5. Instancing用 SRV の作成
 	D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc{};
@@ -55,19 +69,17 @@ void Particle::Initialize(
 	instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 	instancingSrvDesc.Buffer.FirstElement = 0;
 	instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-	instancingSrvDesc.Buffer.NumElements = kNumInstance;
-	instancingSrvDesc.Buffer.StructureByteStride = sizeof(TransformationMatrix);
+	instancingSrvDesc.Buffer.NumElements = kNumMaxInstance;
+	instancingSrvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
 
 	instancingSrvHandleCPU_ = GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSize, srvIndexCounter);
 	instancingSrvHandleGPU_ = GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSize, srvIndexCounter++);
 
 	device->CreateShaderResourceView(instancingResource_.Get(), &instancingSrvDesc, instancingSrvHandleCPU_);
 
-	// 6. Transform の初期化（ずらして配置）
-	for (uint32_t index = 0; index < kNumInstance; ++index) {
-		transforms_[index].scale = { 1.0f, 1.0f, 1.0f };
-		transforms_[index].rotate = { 0.0f, 0.0f, 0.0f };
-		transforms_[index].translate = { index * 0.1f, index * 0.1f, index * 0.1f };
+	// 6. Particle の初期化
+	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
+		particles_[index] = MakeNewParticle(randomEngine_);
 	}
 }
 
@@ -154,10 +166,25 @@ void Particle::CreateRootSignatureAndPSO(
 	psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
 	psoDesc.VS = { vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize() };
 	psoDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() };
+
+	// ★ 加算ブレンド (AddBlend) の設定
 	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = TRUE;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
 	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // 両面表示
+
+	// ★ Depthの書き込みを行わない
 	psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Depthの書き込みを行わない
+
 	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psoDesc.NumRenderTargets = 1;
@@ -170,20 +197,67 @@ void Particle::CreateRootSignatureAndPSO(
 }
 
 void Particle::Update(const Matrix4x4& viewProjectionMatrix) {
-	// Transform情報からWVP/World行列を計算して書き込む
-	for (uint32_t index = 0; index < kNumInstance; ++index) {
-		Matrix4x4 worldMatrix = MakeAffineMatrix(transforms_[index].scale, transforms_[index].rotate, transforms_[index].translate);
+	const float kDeltaTime = 1.0f / 60.0f;
+	uint32_t numInstance = 0; // 描画すべきインスタンス数
+
+	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
+		// 生存期間を過ぎていたら更新せず描画対象にしない
+		if (particles_[index].lifeTime <= particles_[index].currentTime) {
+			continue;
+		}
+
+		// 速度を位置に反映
+		particles_[index].transform.translate.x += particles_[index].velocity.x * kDeltaTime;
+		particles_[index].transform.translate.y += particles_[index].velocity.y * kDeltaTime;
+		particles_[index].transform.translate.z += particles_[index].velocity.z * kDeltaTime;
+
+		// 経過時間を足す
+		particles_[index].currentTime += kDeltaTime;
+
+		// 行列計算
+		Matrix4x4 worldMatrix = MakeAffineMatrix(particles_[index].transform.scale, particles_[index].transform.rotate, particles_[index].transform.translate);
 		Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, viewProjectionMatrix);
 
-		instancingData_[index].WVP = worldViewProjectionMatrix;
-		instancingData_[index].World = worldMatrix;
+		// GPU転送バッファにセット
+		instancingData_[numInstance].WVP = worldViewProjectionMatrix;
+		instancingData_[numInstance].World = worldMatrix;
+		instancingData_[numInstance].color = particles_[index].color;
+
+		// ★ α値を徐々に0に近づける
+		float alpha = 1.0f - (particles_[index].currentTime / particles_[index].lifeTime);
+		instancingData_[numInstance].color.w = alpha;
+
+		// 生きているParticleの数を1つカウントする
+		++numInstance;
 	}
+
+	numInstance_ = numInstance;
 }
 
-// ★【追加】Particle用 ImGui 制御パネル
+void Particle::Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU) {
+	// PSO & RootSignatureのセット
+	commandList->SetPipelineState(pipelineState_.Get());
+	commandList->SetGraphicsRootSignature(rootSignature_.Get());
+
+	// ルートパラメータのバインド
+	commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+	commandList->SetGraphicsRootDescriptorTable(1, instancingSrvHandleGPU_); // Instancing用 StructuredBuffer SRV
+	commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);   // テクスチャ SRV
+
+	commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+
+	// 描画 (生きている numInstance_ だけ描画)
+	commandList->DrawInstanced(6, numInstance_, 0, 0);
+}
+
 void Particle::DrawImGui() {
 #ifdef USE_IMGUI
-	// 1. Material & Lighting 設定
+	if (ImGui::Button("Respawn All Particles")) {
+		for (uint32_t i = 0; i < kNumMaxInstance; ++i) {
+			particles_[i] = MakeNewParticle(randomEngine_);
+		}
+	}
+
 	if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
 		if (materialData_) {
 			ImGui::ColorEdit4("Material Color", &materialData_->color.x);
@@ -195,36 +269,26 @@ void Particle::DrawImGui() {
 		}
 	}
 
-	// 2. 全インスタンス Transform 設定 (個別に調整可能)
-	if (ImGui::CollapsingHeader("Instances Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-		for (uint32_t i = 0; i < kNumInstance; ++i) {
+	if (ImGui::CollapsingHeader("Instances Parameter", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Text("Active Particles: %u / %u", numInstance_, kNumMaxInstance);
+		for (uint32_t i = 0; i < kNumMaxInstance; ++i) {
 			ImGui::PushID(static_cast<int>(i));
 			std::string label = std::format("Particle Instance {}", i);
 
 			if (ImGui::TreeNode(label.c_str())) {
-				ImGui::SliderFloat3("Position", &transforms_[i].translate.x, -10.0f, 10.0f);
-				ImGui::SliderFloat3("Rotate", &transforms_[i].rotate.x, -3.14f, 3.14f);
-				ImGui::SliderFloat3("Scale", &transforms_[i].scale.x, 0.01f, 5.0f);
+				ImGui::ColorEdit4("Color", &particles_[i].color.x);
+				ImGui::SliderFloat3("Position", &particles_[i].transform.translate.x, -10.0f, 10.0f);
+				ImGui::SliderFloat3("Velocity", &particles_[i].velocity.x, -5.0f, 5.0f);
+				ImGui::SliderFloat3("Rotate", &particles_[i].transform.rotate.x, -3.14f, 3.14f);
+				ImGui::SliderFloat3("Scale", &particles_[i].transform.scale.x, 0.01f, 5.0f);
+				ImGui::Text("LifeTime: %.2f / %.2f s", particles_[i].currentTime, particles_[i].lifeTime);
+				if (ImGui::Button("Reset / Respawn")) {
+					particles_[i] = MakeNewParticle(randomEngine_);
+				}
 				ImGui::TreePop();
 			}
 			ImGui::PopID();
 		}
 	}
 #endif
-}
-
-void Particle::Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU) {
-	// PSO & RootSignatureのセット
-	commandList->SetPipelineState(pipelineState_.Get());
-	commandList->SetGraphicsRootSignature(rootSignature_.Get());
-
-	// ルートパラメータのバインド
-	commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
-	commandList->SetGraphicsRootDescriptorTable(1, instancingSrvHandleGPU_); // Instancing用 StructuredBuffer SRV
-	commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);   // uvChecker テクスチャ SRV
-
-	commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
-
-	// 描画 (6頂点の板ポリゴンを kNumInstance だけInstance描画)
-	commandList->DrawInstanced(6, kNumInstance, 0, 0);
 }

@@ -3,7 +3,7 @@
 // RootParameter[0]: CBV (b0)
 ConstantBuffer<Material> gMaterial : register(b0);
 
-// RootParameter[2]: Texture SRV (t0) に修正
+// RootParameter[2]: Texture SRV (t0)
 Texture2D<float32_t4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
@@ -25,8 +25,8 @@ PixelShaderOutput main(VertexShaderOutput input)
         discard;
     }
     
-    // Particle用マテリアルカラーとテクスチャカラーの乗算
-    output.color = gMaterial.color * textureColor;
+    // gMaterial.color * textureColor * input.color でインスタンス色を反映
+    output.color = gMaterial.color * textureColor * input.color;
     
     return output;
 }
