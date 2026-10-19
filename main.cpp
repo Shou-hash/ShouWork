@@ -1,117 +1,42 @@
 #include "Engine/Base/Common.h"
 #include "Engine/Base/WinApp.h"
+#include "Engine/Base/DirectXCommon.h"
 #include "GameScene.h"
-
-// DXGIファクトリーの実体定義
-Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr;
-Microsoft::WRL::ComPtr<ID3D12Device> device = nullptr;
 
 int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
 	CoInitializeEx(0, COINIT_MULTITHREADED);
 	SetUnhandledExceptionFilter(ExportDump);
 
-	OutputDebugStringA("Hello, DirectX!\n");
-
-#pragma region ウィンドウの作成
-
-	// ★ WinAppクラスの生成と初期化（条件1）
+	// 1. WinApp の生成と初期化
 	std::unique_ptr<WinApp> winApp = std::make_unique<WinApp>();
 	winApp->Initialize(L"LE2C_12_ショウ_ズーウェン");
 
-#pragma endregion
+	// 2. 【条件1】DirectXCommon の生成と初期化
+	std::unique_ptr<DirectXCommon> dxCommon = std::make_unique<DirectXCommon>();
+	dxCommon->Initialize(winApp.get());
 
-#ifdef _DEBUG
-	ID3D12Debug1* debugController = nullptr;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
-		debugController->EnableDebugLayer();
-		debugController->SetEnableGPUBasedValidation(TRUE);
-	}
-#endif
-
-#pragma region DirectX 12の初期化
-
-	HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory));
-	assert(SUCCEEDED(hr));
-
-	IDXGIAdapter4* useAdapter = nullptr;
-	for (UINT i = 0; dxgiFactory->EnumAdapterByGpuPreference(i,
-		DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&useAdapter)) != DXGI_ERROR_NOT_FOUND; ++i) {
-		DXGI_ADAPTER_DESC3 adapterDesc{};
-		hr = useAdapter->GetDesc3(&adapterDesc);
-		assert(SUCCEEDED(hr));
-
-		if (!(adapterDesc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE)) {
-			break;
-		}
-		useAdapter = nullptr;
-	}
-	assert(useAdapter != nullptr);
-
-	D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0 };
-	for (size_t i = 0; i < _countof(featureLevels); ++i) {
-		hr = D3D12CreateDevice(useAdapter, featureLevels[i], IID_PPV_ARGS(&device));
-		if (SUCCEEDED(hr)) break;
-	}
-	assert(device != nullptr);
-
-	// Command Queue & List
-	ID3D12CommandQueue* commandQueue = nullptr;
-	D3D12_COMMAND_QUEUE_DESC commandQueueDesc{};
-	hr = device->CreateCommandQueue(&commandQueueDesc, IID_PPV_ARGS(&commandQueue));
-	assert(SUCCEEDED(hr));
-
-	ID3D12CommandAllocator* commandAllocator = nullptr;
-	hr = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator));
-	assert(SUCCEEDED(hr));
-
-	ID3D12GraphicsCommandList* commandList = nullptr;
-	hr = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator, nullptr, IID_PPV_ARGS(&commandList));
-	assert(SUCCEEDED(hr));
-
-	// SwapChain（WinAppの定数とgetterを使用）
-	IDXGISwapChain4* swapChain = nullptr;
-	DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
-	swapChainDesc.Width = WinApp::kWindowWidth;   // ★ クラス定数（条件5）
-	swapChainDesc.Height = WinApp::kWindowHeight; // ★ クラス定数（条件5）
-	swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swapChainDesc.SampleDesc.Count = 1;
-	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapChainDesc.BufferCount = 2;
-	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	hr = dxgiFactory->CreateSwapChainForHwnd(
-		commandQueue,
-		winApp->GetHwnd(), // ★ GetHwnd() getter（条件4）
-		&swapChainDesc,
-		nullptr,
-		nullptr,
-		reinterpret_cast<IDXGISwapChain1**>(&swapChain)
+	// TextureManager 等の初期化（【条件4】dxCommon から生ポインタを取り出して渡す）
+	TextureManager::Initialize(
+		dxCommon->GetDevice(),
+		dxCommon->GetCommandList(),
+		dxCommon->GetSrvDescriptorHeap(),
+		dxCommon->GetDescriptorSize(),
+		dxCommon->GetSrvIndexCounter()
 	);
+
+	Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils;
+	Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler;
+	HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils));
+	assert(SUCCEEDED(hr));
+	hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
 	assert(SUCCEEDED(hr));
 
-	// Descriptors
-	ID3D12DescriptorHeap* rtvDescriptorHeap = CreateDescriptorHeap(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2, false);
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap = CreateDescriptorHeap(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
-
-	ID3D12Resource* swapChainResources[2] = { nullptr };
-	hr = swapChain->GetBuffer(0, IID_PPV_ARGS(&swapChainResources[0]));
-	assert(SUCCEEDED(hr));
-	hr = swapChain->GetBuffer(1, IID_PPV_ARGS(&swapChainResources[1]));
+	Microsoft::WRL::ComPtr<IDxcIncludeHandler> dxcIncludeHandler;
+	hr = dxcUtils->CreateDefaultIncludeHandler(&dxcIncludeHandler);
 	assert(SUCCEEDED(hr));
 
-	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
-	rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[2];
-	rtvHandles[0] = rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	device->CreateRenderTargetView(swapChainResources[0], &rtvDesc, rtvHandles[0]);
-	rtvHandles[1].ptr = rtvHandles[0].ptr + device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	device->CreateRenderTargetView(swapChainResources[1], &rtvDesc, rtvHandles[1]);
-
-#pragma endregion
-
-#pragma region RootSignature & PipelineState
-
+	// RootSignature の構築
 	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
 	descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -155,217 +80,74 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	descriptionRootSignature.pStaticSamplers = staticSamplers;
 	descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
-	UINT descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	uint32_t srvIndexCounter = 0;
-
-	TextureManager::Initialize(device.Get(), commandList, srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter);
-
-	// DepthStencil 構築（WinAppの定数を使用）
-	D3D12_RESOURCE_DESC resourceDesc{};
-	resourceDesc.Width = WinApp::kWindowWidth;   // ★ クラス定数（条件5）
-	resourceDesc.Height = WinApp::kWindowHeight; // ★ クラス定数（条件5）
-	resourceDesc.MipLevels = 1;
-	resourceDesc.DepthOrArraySize = 1;
-	resourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	resourceDesc.SampleDesc.Count = 1;
-	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-
-	D3D12_HEAP_PROPERTIES heapProperties{};
-	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-	D3D12_CLEAR_VALUE depthClearValue{};
-	depthClearValue.DepthStencil.Depth = 1.0f;
-	depthClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-
-	ID3D12Resource* depthStencilResource = nullptr;
-	hr = device->CreateCommittedResource(
-		&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc,
-		D3D12_RESOURCE_STATE_DEPTH_WRITE, &depthClearValue, IID_PPV_ARGS(&depthStencilResource));
-	assert(SUCCEEDED(hr));
-
-	ID3D12DescriptorHeap* dsvDescriptorHeap = CreateDescriptorHeap(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, false);
-	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
-	dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-	device->CreateDepthStencilView(depthStencilResource, &dsvDesc, dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-
-#ifdef USE_IMGUI
-	D3D12_CPU_DESCRIPTOR_HANDLE imguiSrvHandleCPU = GetCPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter);
-	D3D12_GPU_DESCRIPTOR_HANDLE imguiSrvHandleGPU = GetGPUDescriptorHandle(srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter++);
-
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGui::StyleColorsDark();
-	ImGui_ImplWin32_Init(winApp->GetHwnd()); // ★ GetHwnd() getter（条件4）
-	ImGui_ImplDX12_Init(device.Get(), swapChainDesc.BufferCount, rtvDesc.Format, srvDescriptorHeap.Get(), imguiSrvHandleCPU, imguiSrvHandleGPU);
-	ImGuiIO& io = ImGui::GetIO();
-	io.Fonts->Build();
-#endif
-
-	IDxcUtils* dxcUtils = nullptr;
-	IDxcCompiler3* dxcCompiler = nullptr;
-	hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils));
-	assert(SUCCEEDED(hr));
-	hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
-	assert(SUCCEEDED(hr));
-
-	IDxcIncludeHandler* dxcIncludeHandler = nullptr;
-	hr = dxcUtils->CreateDefaultIncludeHandler(&dxcIncludeHandler);
-	assert(SUCCEEDED(hr));
-
-	ID3DBlob* signatureBlob = nullptr;
-	ID3DBlob* errorBlob = nullptr;
+	Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
+	Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
 	hr = D3D12SerializeRootSignature(&descriptionRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
 	assert(SUCCEEDED(hr));
 
-	ID3D12RootSignature* rootSignature = nullptr;
-	hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+	hr = dxCommon->GetDevice()->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
 	assert(SUCCEEDED(hr));
 
-	D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
-	inputElementDescs[0].SemanticName = "POSITION";
-	inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-	inputElementDescs[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-	inputElementDescs[1].SemanticName = "TEXCOORD";
-	inputElementDescs[1].Format = DXGI_FORMAT_R32G32_FLOAT;
-	inputElementDescs[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-	inputElementDescs[2].SemanticName = "NORMAL";
-	inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
-	inputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+	Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"Engine/Shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils.Get(), dxcCompiler.Get(), dxcIncludeHandler.Get());
+	Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"Engine/Shaders/Object3D.PS.hlsl", L"ps_6_0", dxcUtils.Get(), dxcCompiler.Get(), dxcIncludeHandler.Get());
 
-	D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{ inputElementDescs, _countof(inputElementDescs) };
-	D3D12_BLEND_DESC blendDesc{};
-	blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	D3D12_RASTERIZER_DESC rasterizerDesc{};
-	rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
-	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
-
-	IDxcBlob* vertexShaderBlob = CompileShader(L"Engine/Shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
-	IDxcBlob* pixelShaderBlob = CompileShader(L"Engine/Shaders/Object3D.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
-
-	// BlendManagerで全ブレンドモード用PSOを一括初期化
 	BlendManager::GetInstance()->Initialize(
-		device.Get(),
-		rootSignature,
-		vertexShaderBlob,
-		pixelShaderBlob,
+		dxCommon->GetDevice(),
+		rootSignature.Get(),
+		vertexShaderBlob.Get(),
+		pixelShaderBlob.Get(),
 		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 		DXGI_FORMAT_D24_UNORM_S8_UINT
 	);
 
-#pragma endregion
-
-	// GameSceneの作成と初期化（WinAppのポインタを引数で渡す）
+	// 3. GameScene の初期化
 	std::unique_ptr<GameScene> gameScene = std::make_unique<GameScene>();
 	gameScene->Initialize(
-		device.Get(),
-		commandList,
-		winApp.get(), // ★ 自作クラスのポインタを渡す（条件6）
-		srvDescriptorHeap.Get(),
-		descriptorSize,
-		srvIndexCounter,
-		dxcUtils,
-		dxcCompiler,
-		dxcIncludeHandler,
-		rootSignature
+		dxCommon->GetDevice(),
+		dxCommon->GetCommandList(),
+		winApp.get(),
+		dxCommon->GetSrvDescriptorHeap(),
+		dxCommon->GetDescriptorSize(),
+		dxCommon->GetSrvIndexCounter(),
+		dxcUtils.Get(),
+		dxcCompiler.Get(),
+		dxcIncludeHandler.Get(),
+		rootSignature.Get()
 	);
 
-	hr = commandList->Close();
-	assert(SUCCEEDED(hr));
+#ifdef USE_IMGUI
+	D3D12_CPU_DESCRIPTOR_HANDLE imguiSrvHandleCPU = GetCPUDescriptorHandle(dxCommon->GetSrvDescriptorHeap(), dxCommon->GetDescriptorSize(), dxCommon->GetSrvIndexCounter());
+	D3D12_GPU_DESCRIPTOR_HANDLE imguiSrvHandleGPU = GetGPUDescriptorHandle(dxCommon->GetSrvDescriptorHeap(), dxCommon->GetDescriptorSize(), dxCommon->GetSrvIndexCounter()++);
 
-	ID3D12CommandList* initCommandLists[] = { commandList };
-	commandQueue->ExecuteCommandLists(1, initCommandLists);
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGui::StyleColorsDark();
+	ImGui_ImplWin32_Init(winApp->GetHwnd());
+	ImGui_ImplDX12_Init(dxCommon->GetDevice(), 2, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, dxCommon->GetSrvDescriptorHeap(), imguiSrvHandleCPU, imguiSrvHandleGPU);
+	ImGuiIO& io = ImGui::GetIO();
+	io.Fonts->Build();
+#endif
 
-	ID3D12Fence* fence = nullptr;
-	uint64_t fenceValue = 0;
-	hr = device->CreateFence(fenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
-	assert(SUCCEEDED(hr));
-
-	HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-	assert(fenceEvent != nullptr);
-
-	fenceValue++;
-	commandQueue->Signal(fence, fenceValue);
-	if (fence->GetCompletedValue() < fenceValue) {
-		fence->SetEventOnCompletion(fenceValue, fenceEvent);
-		WaitForSingleObject(fenceEvent, INFINITE);
-	}
-
-	hr = commandAllocator->Reset();
-	assert(SUCCEEDED(hr));
-	hr = commandList->Reset(commandAllocator, nullptr);
-	assert(SUCCEEDED(hr));
-
-	// ★ WinApp のメッセージ処理ループ（条件1, 3）
+	// 4. メインループ
 	while (!winApp->ProcessMessage())
 	{
-		// ゲームシーンの更新
 		gameScene->Update();
 
-		UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
+		// 【条件2】描画前処理（関数呼び出し）
+		dxCommon->PreDraw();
 
-		D3D12_RESOURCE_BARRIER barrier{};
-		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		barrier.Transition.pResource = swapChainResources[backBufferIndex];
-		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		commandList->ResourceBarrier(1, &barrier);
-
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-		commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, &dsvHandle);
-
-		float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
-		commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
-		commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-
-		// ビューポート＆シザー矩形（WinAppの定数を使用）
-		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f }; // ★ 定数使用（条件5）
-		D3D12_RECT scissorRect{ 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight }; // ★ 定数使用（条件5）
-
-		commandList->RSSetViewports(1, &viewport);
-		commandList->RSSetScissorRects(1, &scissorRect);
-		commandList->SetGraphicsRootSignature(rootSignature);
-
-		ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap.Get() };
-		commandList->SetDescriptorHeaps(1, descriptorHeaps);
-
-		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		// RootSignatureのセット
+		dxCommon->GetCommandList()->SetGraphicsRootSignature(rootSignature.Get());
 
 		// ゲームシーンの描画
-		gameScene->Draw(commandList);
+		gameScene->Draw(dxCommon->GetCommandList());
 
-		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-		commandList->ResourceBarrier(1, &barrier);
-
-		hr = commandList->Close();
-		assert(SUCCEEDED(hr));
-
-		ID3D12CommandList* commandLists[] = { commandList };
-		commandQueue->ExecuteCommandLists(1, commandLists);
-
-		swapChain->Present(1, 0);
-
-		fenceValue++;
-		commandQueue->Signal(fence, fenceValue);
-
-		if (fence->GetCompletedValue() < fenceValue) {
-			fence->SetEventOnCompletion(fenceValue, fenceEvent);
-			WaitForSingleObject(fenceEvent, INFINITE);
-		}
-
-		hr = commandAllocator->Reset();
-		assert(SUCCEEDED(hr));
-		hr = commandList->Reset(commandAllocator, nullptr);
-		assert(SUCCEEDED(hr));
+		// 【条件2, 5】描画後処理（関数呼び出し & 60FPS固定）
+		dxCommon->PostDraw();
 	}
 
-	// 終了処理
 	gameScene.reset();
-
-	CloseHandle(fenceEvent);
 
 #ifdef USE_IMGUI
 	ImGui_ImplDX12_Shutdown();
