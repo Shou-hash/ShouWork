@@ -188,6 +188,17 @@ void GameScene::Update() {
 	// ImGui更新
 	DrawImGui();
 
+	// --- テクスチャ範囲指定切り取り (UV自動計算) ---
+	// 1. テクスチャ全体に対する切り取り位置・幅高さの比率を計算
+	spriteUVScale.x = textureCutSize.x / textureSize.x;
+	spriteUVScale.y = textureCutSize.y / textureSize.y;
+
+	spriteUVTranslate.x = textureLeftTop.x / textureSize.x;
+	spriteUVTranslate.y = textureLeftTop.y / textureSize.y;
+
+	// 2. 計算したUVスケールと移動量からUV変換行列を生成
+	spriteMaterialData->uvTransform = MakeUVTransformMatrix(spriteUVScale, spriteUVRotate, spriteUVTranslate);
+
 	// ★ Particleの更新
 	if (particle_ && showParticles) {
 		Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
@@ -371,7 +382,7 @@ void GameScene::DrawImGui() {
 		if (ImGui::BeginTabItem("Central Model")) {
 			ImGui::Checkbox("Show Central Model", &showModel);
 			if (showModel) {
-				
+
 				// ★【追加】中央モデル用 Blend Mode UI
 				int planeBlendIdx = static_cast<int>(planeBlendMode_);
 				if (ImGui::Combo("Blend Mode", &planeBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {
@@ -437,7 +448,7 @@ void GameScene::DrawImGui() {
 		if (ImGui::BeginTabItem("Sprite")) {
 			ImGui::Checkbox("Show Sprite", &showSprite);
 			if (showSprite) {
-				
+
 				// ★【追加】スプライト用 Blend Mode UI
 				int spriteBlendIdx = static_cast<int>(spriteBlendMode_);
 				if (ImGui::Combo("Blend Mode", &spriteBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {

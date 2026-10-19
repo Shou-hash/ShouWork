@@ -50,6 +50,11 @@ private:
 	Sound::SoundData soundData;
 	bool isDebugCamera = false;
 
+	//スプライトの切り取り設定用変数(GameScene.h に追加)
+	Vector2 textureLeftTop = { 0.0f, 0.0f };   // 切り取り開始ピクセル座標 (x, y)
+	Vector2 textureCutSize = { 100.0f, 100.0f }; // 切り取るピクセルサイズ (w, h)
+	Vector2 textureSize    = { 512.0f, 512.0f }; // テクスチャ全体のピクセルサイズ (W, H)
+
 	// ★ Particle クラスのインスタンス
 	std::unique_ptr<Particle> particle_ = nullptr;
 	bool showParticles = true;
