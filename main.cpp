@@ -1,11 +1,12 @@
 #include "Engine/Base/Common.h"
+#include "Engine/Base/WinApp.h"
 #include "GameScene.h"
 
 // DXGIファクトリーの実体定義
 Microsoft::WRL::ComPtr<IDXGIFactory7> dxgiFactory = nullptr;
 Microsoft::WRL::ComPtr<ID3D12Device> device = nullptr;
 
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
+int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
 	CoInitializeEx(0, COINIT_MULTITHREADED);
 	SetUnhandledExceptionFilter(ExportDump);
@@ -14,32 +15,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma region ウィンドウの作成
 
-	WNDCLASS wc{};
-	wc.lpfnWndProc = WindowProc;
-	wc.lpszClassName = L"CG2WindowClass";
-	wc.hInstance = hInstance;
-	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-	RegisterClass(&wc);
-
-	const int32_t kClientWidth = 1280;
-	const int32_t kClientHeight = 720;
-	RECT wrc = { 0, 0, kClientWidth, kClientHeight };
-	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
-
-	HWND hwnd = CreateWindow(
-		wc.lpszClassName,
-		L"LE2C_12_ショウ_ズーウェン",
-		WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT,
-		CW_USEDEFAULT,
-		wrc.right - wrc.left,
-		wrc.bottom - wrc.top,
-		nullptr,
-		nullptr,
-		wc.hInstance,
-		nullptr);
-
-	ShowWindow(hwnd, SW_SHOW);
+	// ★ WinAppクラスの生成と初期化（条件1）
+	std::unique_ptr<WinApp> winApp = std::make_unique<WinApp>();
+	winApp->Initialize(L"LE2C_12_ショウ_ズーウェン");
 
 #pragma endregion
 
@@ -91,17 +69,24 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	hr = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator, nullptr, IID_PPV_ARGS(&commandList));
 	assert(SUCCEEDED(hr));
 
-	// SwapChain
+	// SwapChain（WinAppの定数とgetterを使用）
 	IDXGISwapChain4* swapChain = nullptr;
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
-	swapChainDesc.Width = kClientWidth;
-	swapChainDesc.Height = kClientHeight;
+	swapChainDesc.Width = WinApp::kWindowWidth;   // ★ クラス定数（条件5）
+	swapChainDesc.Height = WinApp::kWindowHeight; // ★ クラス定数（条件5）
 	swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	swapChainDesc.SampleDesc.Count = 1;
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapChainDesc.BufferCount = 2;
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	hr = dxgiFactory->CreateSwapChainForHwnd(commandQueue, hwnd, &swapChainDesc, nullptr, nullptr, reinterpret_cast<IDXGISwapChain1**>(&swapChain));
+	hr = dxgiFactory->CreateSwapChainForHwnd(
+		commandQueue,
+		winApp->GetHwnd(), // ★ GetHwnd() getter（条件4）
+		&swapChainDesc,
+		nullptr,
+		nullptr,
+		reinterpret_cast<IDXGISwapChain1**>(&swapChain)
+	);
 	assert(SUCCEEDED(hr));
 
 	// Descriptors
@@ -175,10 +160,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 	TextureManager::Initialize(device.Get(), commandList, srvDescriptorHeap.Get(), descriptorSize, srvIndexCounter);
 
-	// DepthStencil 構築
+	// DepthStencil 構築（WinAppの定数を使用）
 	D3D12_RESOURCE_DESC resourceDesc{};
-	resourceDesc.Width = kClientWidth;
-	resourceDesc.Height = kClientHeight;
+	resourceDesc.Width = WinApp::kWindowWidth;   // ★ クラス定数（条件5）
+	resourceDesc.Height = WinApp::kWindowHeight; // ★ クラス定数（条件5）
 	resourceDesc.MipLevels = 1;
 	resourceDesc.DepthOrArraySize = 1;
 	resourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -212,7 +197,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
-	ImGui_ImplWin32_Init(hwnd);
+	ImGui_ImplWin32_Init(winApp->GetHwnd()); // ★ GetHwnd() getter（条件4）
 	ImGui_ImplDX12_Init(device.Get(), swapChainDesc.BufferCount, rtvDesc.Format, srvDescriptorHeap.Get(), imguiSrvHandleCPU, imguiSrvHandleGPU);
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->Build();
@@ -260,7 +245,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	IDxcBlob* vertexShaderBlob = CompileShader(L"Engine/Shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
 	IDxcBlob* pixelShaderBlob = CompileShader(L"Engine/Shaders/Object3D.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
 
-	// 従来の graphicsPipelineState 作成コードを削除し、BlendManagerで全ブレンドモード用PSOを一括初期化
+	// BlendManagerで全ブレンドモード用PSOを一括初期化
 	BlendManager::GetInstance()->Initialize(
 		device.Get(),
 		rootSignature,
@@ -272,13 +257,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 
 #pragma endregion
 
-	// GameSceneの作成と初期化
+	// GameSceneの作成と初期化（WinAppのポインタを引数で渡す）
 	std::unique_ptr<GameScene> gameScene = std::make_unique<GameScene>();
 	gameScene->Initialize(
 		device.Get(),
 		commandList,
-		hwnd,
-		hInstance,
+		winApp.get(), // ★ 自作クラスのポインタを渡す（条件6）
 		srvDescriptorHeap.Get(),
 		descriptorSize,
 		srvIndexCounter,
@@ -314,80 +298,74 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	hr = commandList->Reset(commandAllocator, nullptr);
 	assert(SUCCEEDED(hr));
 
-	MSG msg{};
-	while (msg.message != WM_QUIT)
+	// ★ WinApp のメッセージ処理ループ（条件1, 3）
+	while (!winApp->ProcessMessage())
 	{
-		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+		// ゲームシーンの更新
+		gameScene->Update();
+
+		UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
+
+		D3D12_RESOURCE_BARRIER barrier{};
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Transition.pResource = swapChainResources[backBufferIndex];
+		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		commandList->ResourceBarrier(1, &barrier);
+
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+		commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, &dsvHandle);
+
+		float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
+		commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
+		commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
+		// ビューポート＆シザー矩形（WinAppの定数を使用）
+		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, static_cast<float>(WinApp::kWindowWidth), static_cast<float>(WinApp::kWindowHeight), 0.0f, 1.0f }; // ★ 定数使用（条件5）
+		D3D12_RECT scissorRect{ 0, 0, WinApp::kWindowWidth, WinApp::kWindowHeight }; // ★ 定数使用（条件5）
+
+		commandList->RSSetViewports(1, &viewport);
+		commandList->RSSetScissorRects(1, &scissorRect);
+		commandList->SetGraphicsRootSignature(rootSignature);
+
+		ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap.Get() };
+		commandList->SetDescriptorHeaps(1, descriptorHeaps);
+
+		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		// ゲームシーンの描画
+		gameScene->Draw(commandList);
+
+		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		commandList->ResourceBarrier(1, &barrier);
+
+		hr = commandList->Close();
+		assert(SUCCEEDED(hr));
+
+		ID3D12CommandList* commandLists[] = { commandList };
+		commandQueue->ExecuteCommandLists(1, commandLists);
+
+		swapChain->Present(1, 0);
+
+		fenceValue++;
+		commandQueue->Signal(fence, fenceValue);
+
+		if (fence->GetCompletedValue() < fenceValue) {
+			fence->SetEventOnCompletion(fenceValue, fenceEvent);
+			WaitForSingleObject(fenceEvent, INFINITE);
 		}
-		else {
-			// ゲームシーンの更新
-			gameScene->Update();
 
-			UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
-
-			D3D12_RESOURCE_BARRIER barrier{};
-			barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-			barrier.Transition.pResource = swapChainResources[backBufferIndex];
-			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-			commandList->ResourceBarrier(1, &barrier);
-
-			D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-			commandList->OMSetRenderTargets(1, &rtvHandles[backBufferIndex], false, &dsvHandle);
-
-			float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
-			commandList->ClearRenderTargetView(rtvHandles[backBufferIndex], clearColor, 0, nullptr);
-			commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-
-			D3D12_VIEWPORT viewport{ 0.0f, 0.0f, (float)kClientWidth, (float)kClientHeight, 0.0f, 1.0f };
-			D3D12_RECT scissorRect{ 0, 0, kClientWidth, kClientHeight };
-
-			commandList->RSSetViewports(1, &viewport);
-			commandList->RSSetScissorRects(1, &scissorRect);
-			commandList->SetGraphicsRootSignature(rootSignature);
-
-			ID3D12DescriptorHeap* descriptorHeaps[] = { srvDescriptorHeap.Get() };
-			commandList->SetDescriptorHeaps(1, descriptorHeaps);
-
-			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-			// ゲームシーンの描画
-			gameScene->Draw(commandList);
-
-			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-			commandList->ResourceBarrier(1, &barrier);
-
-			hr = commandList->Close();
-			assert(SUCCEEDED(hr));
-
-			ID3D12CommandList* commandLists[] = { commandList };
-			commandQueue->ExecuteCommandLists(1, commandLists);
-
-			swapChain->Present(1, 0);
-
-			fenceValue++;
-			commandQueue->Signal(fence, fenceValue);
-
-			if (fence->GetCompletedValue() < fenceValue) {
-				fence->SetEventOnCompletion(fenceValue, fenceEvent);
-				WaitForSingleObject(fenceEvent, INFINITE);
-			}
-
-			hr = commandAllocator->Reset();
-			assert(SUCCEEDED(hr));
-			hr = commandList->Reset(commandAllocator, nullptr);
-			assert(SUCCEEDED(hr));
-		}
+		hr = commandAllocator->Reset();
+		assert(SUCCEEDED(hr));
+		hr = commandList->Reset(commandAllocator, nullptr);
+		assert(SUCCEEDED(hr));
 	}
 
 	// 終了処理
 	gameScene.reset();
 
 	CloseHandle(fenceEvent);
-	CloseWindow(hwnd);
 
 #ifdef USE_IMGUI
 	ImGui_ImplDX12_Shutdown();
@@ -395,6 +373,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	ImGui::DestroyContext();
 #endif
 
+	winApp->Finalize();
 	CoUninitialize();
 	return 0;
 }

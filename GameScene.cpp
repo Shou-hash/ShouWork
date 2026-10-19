@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include "Engine/Base/WinApp.h" // ★ WinApp のインクルード
 
 GameScene::~GameScene() {
 	// keyboard->Unacquire() などの処理は Input クラスのデストラクタ / 解放処理に任せる
@@ -12,8 +13,7 @@ GameScene::~GameScene() {
 void GameScene::Initialize(
 	ID3D12Device* device,
 	ID3D12GraphicsCommandList* commandList,
-	HWND hwnd,
-	HINSTANCE hInstance,
+	WinApp* winApp,
 	ID3D12DescriptorHeap* srvDescriptorHeap,
 	UINT descriptorSize,
 	uint32_t& srvIndexCounter,
@@ -36,7 +36,7 @@ void GameScene::Initialize(
 
 	// ★ Inputクラスの生成と初期化
 	input_ = std::make_unique<Input>();
-	input_->Initialize(hInstance, hwnd);
+	input_->Initialize(winApp->GetHInstance(), winApp->GetHwnd());
 
 	// XInputパッドの初期化
 	gamePad = new DirectInput();

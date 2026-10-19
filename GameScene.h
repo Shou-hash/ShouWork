@@ -1,6 +1,8 @@
 #pragma once
 #include "Engine/Base/Common.h"
 
+class WinApp;
+
 class GameScene {
 public:
 	GameScene() = default;
@@ -8,10 +10,9 @@ public:
 
 	// 初期化・更新・描画
 	void Initialize(
-		ID3D12Device* device, 
-		ID3D12GraphicsCommandList* commandList, 
-		HWND hwnd, 
-		HINSTANCE hInstance,
+		ID3D12Device* device,
+		ID3D12GraphicsCommandList* commandList,
+		WinApp* winApp,
 		ID3D12DescriptorHeap* srvDescriptorHeap,
 		UINT descriptorSize,
 		uint32_t& srvIndexCounter,
@@ -20,7 +21,9 @@ public:
 		IDxcIncludeHandler* dxcIncludeHandler,
 		ID3D12RootSignature* rootSignature
 	);
+
 	void Update();
+
 	void Draw(ID3D12GraphicsCommandList* commandList);
 
 public:
