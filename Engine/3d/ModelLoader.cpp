@@ -1,11 +1,14 @@
 #include "ModelLoader.h"
-#include "ModelDraw.h" // ModelDraw のインクルードを追加
+#include "ModelDraw.h"
 #include "Engine/Base/DirectXCommon.h"
 #include <cassert>
 
 ID3D12Device* ModelLoader::sDevice_ = nullptr;
 ID3D12GraphicsCommandList* ModelLoader::sCommandList_ = nullptr;
 D3D12_GPU_DESCRIPTOR_HANDLE ModelLoader::sDefaultTextureSrvHandleGPU_{};
+
+// 実体定義
+std::unordered_map<std::string, std::shared_ptr<Model>> ModelLoader::sModelMap_{};
 
 std::shared_ptr<Model> Model::CreateFromOBJ(const std::string& modelName, bool smoothing) {
 	return ModelLoader::CreateFromOBJ(modelName, smoothing);
@@ -22,17 +25,24 @@ void ModelLoader::Initialize(
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE ModelLoader::LoadTextureAndCreateSRV(const std::string& filePath) {
-	// std::error_code を渡すことで例外スローを防止
 	std::error_code ec;
 	if (filePath.empty() || !std::filesystem::exists(filePath, ec) || ec) {
 		return sDefaultTextureSrvHandleGPU_;
 	}
-	// TextureManagerで管理（キャッシュ適用）
 	return TextureManager::LoadTextureAndCreateSRV(filePath);
 }
 
 std::shared_ptr<Model> ModelLoader::LoadOBJ(const std::string& directoryPath, const std::string& filename, const std::string& modelName) {
 	assert(sDevice_ && "ModelLoader::Initialize が呼ばれていません。");
+
+	// ★【一括管理】検索キーを作成
+	std::string key = directoryPath + "/" + filename;
+
+	// すでにロード済みの場合はキャッシュされているモデルを返す（ファイルの重複読み込みを防止）
+	auto it = sModelMap_.find(key);
+	if (it != sModelMap_.end()) {
+		return it->second;
+	}
 
 	auto model = std::make_shared<Model>();
 	model->name = modelName.empty() ? filename : modelName;
@@ -77,6 +87,9 @@ std::shared_ptr<Model> ModelLoader::LoadOBJ(const std::string& directoryPath, co
 		model->instances.push_back(inst);
 	}
 
+	// ★【一括管理】読み込んだモデルをキャッシュマップに登録
+	sModelMap_[key] = model;
+
 	return model;
 }
 
@@ -91,6 +104,13 @@ std::shared_ptr<Model> ModelLoader::CreateFromOBJ(const std::string& modelName, 
 	}
 
 	return LoadOBJ(dirPath, filePath, modelName);
+}
+
+void ModelLoader::Finalize() {
+	// ★【解放処理】キャッシュを削除
+	sModelMap_.clear();
+	sDevice_ = nullptr;
+	sCommandList_ = nullptr;
 }
 
 // --- Model クラスの描画関数実装 ---
