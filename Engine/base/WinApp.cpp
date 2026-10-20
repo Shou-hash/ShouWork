@@ -1,11 +1,14 @@
 #include "WinApp.h"
-#include "externals/imgui/imgui_impl_win32.h"
 #include <dbghelp.h>
 #include <strsafe.h>
 
 #pragma comment(lib, "Dbghelp.lib")
 
+#ifdef Debug
+#include "externals/imgui/imgui_impl_win32.h"
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#endif // Debug
 
 // クラッシュダンプの出力関数定義
 LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
@@ -37,9 +40,12 @@ LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
 
 // 静的メンバ関数の実装
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+
+#ifdef Debug
 	if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
 		return true;
 	}
+#endif
 
 	switch (msg) {
 	case WM_DESTROY:

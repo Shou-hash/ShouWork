@@ -12,7 +12,7 @@ VertexShaderOutput main(VertexShaderInput input, uint32_t instanceId : SV_Instan
     output.texcoord = input.texcoord;
     
     // 法線をワールド空間に変換
-    output.normal = normalize(mul(float32_t4(input.normal, 0.0f), gParticle[instanceId].World).xyz);
+    output.normal = normalize(mul(float4(input.normal, 0.0f), gParticle[instanceId].World).xyz);
     
     // インスタンスごとの色を PixelShader に送る
     output.color = gParticle[instanceId].color;

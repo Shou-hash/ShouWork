@@ -1,5 +1,5 @@
 #pragma once
-#include "Common.h"
+#include "Engine/Base/Common.h"
 
 class Input; // 前方宣言
 
