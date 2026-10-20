@@ -50,3 +50,5 @@ DirectX 12の定数バッファやDescriptor Heapを活用し、複数メッシ�
 構造体による描画インスタンスの一元管理:
 モデルデータ内の各メッシュに対して RenderMeshInstance 構造体を定義し、頂点バッファ・マテリアル・Transform・WVP（World/View/Projection）定数バッファおよびテクスチャ（SRV）を個別に管理しています。これにより、モデルの特定のパーツのみを非表示（visible）にしたり、部分ごとにライティングやテクスチャを割り当てたりする柔軟なカスタマイズを可能にしています。  ImGuiと連携したリアルタイム調整環境:
 描画パラメータ（位置・回転・スケール、マテリアルカラー、ライティングモード [なし/Lambert/Half-Lambert]、UVトランスフォーム）をImGuiのGUI上からリアルタイムにパラメータ変更・確認できる構成としました。これにより、デザイナーや他のエンジニアがビルドし直すことなく視覚的確認を行えるように配慮しています。
+
+[![DebugBuild](https://github.com/Shou-hash/ShouWork/actions/workflows/DebugBuild.yml/badge.svg)](https://github.com/Shou-hash/ShouWork/actions/workflows/DebugBuild.yml)
