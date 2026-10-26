@@ -124,7 +124,19 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
 	ImGui_ImplWin32_Init(winApp->GetHwnd());
-	ImGui_ImplDX12_Init(dxCommon->GetDevice(), 2, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, dxCommon->GetSrvDescriptorHeap(), imguiSrvHandleCPU, imguiSrvHandleGPU);
+
+	// 構造体を使って初期化
+	ImGui_ImplDX12_InitInfo initInfo = {};
+	initInfo.Device = dxCommon->GetDevice();
+	initInfo.CommandQueue = dxCommon->GetCommandQueue(); // 追加したゲッターを使用
+	initInfo.NumFramesInFlight = 2;
+	initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	initInfo.SrvDescriptorHeap = dxCommon->GetSrvDescriptorHeap();
+	initInfo.LegacySingleSrvCpuDescriptor = imguiSrvHandleCPU;
+	initInfo.LegacySingleSrvGpuDescriptor = imguiSrvHandleGPU;
+
+	ImGui_ImplDX12_Init(&initInfo);
+
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->Build();
 #endif

@@ -5,6 +5,11 @@
     <BuildType Name="Release" />
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="DirectXGame.vcxproj" Id="67cbf1de-3739-4ea4-80ef-98f8bb2e806c" />
+  <Project Path="DirectXGame.vcxproj" Id="67cbf1de-3739-4ea4-80ef-98f8bb2e806c">
+    <BuildDependency Project="externals/DebugTxt/DebugTxt.vcxproj" />
+  </Project>
+  <Project Path="externals/DebugTxt/DebugTxt.vcxproj" Id="a07b61f8-4dd5-4b73-a202-cc691a9eec82">
+    <BuildType Solution="Development|*" Project="Release" />
+  </Project>
   <Project Path="externals/DirectXTex/DirectXTex_Desktop_2022_Win10.vcxproj" Id="371b9fa9-4c90-4ac6-a123-aced756d6c77" />
 </Solution>

@@ -63,6 +63,7 @@ public:
 	// 【条件4】ComPtrから生ポインタを取り出して返すgetter群
 	ID3D12Device* GetDevice() const { return device_.Get(); }
 	ID3D12GraphicsCommandList* GetCommandList() const { return commandList_.Get(); }
+	ID3D12CommandQueue* GetCommandQueue() const { return commandQueue_.Get(); } // ← 追加
 	ID3D12DescriptorHeap* GetSrvDescriptorHeap() const { return srvDescriptorHeap_.Get(); }
 	UINT GetDescriptorSize() const { return descriptorSize_; }
 	uint32_t& GetSrvIndexCounter() { return srvIndexCounter_; }
