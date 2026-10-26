@@ -1,6 +1,7 @@
 #include "Engine/Base/Common.h"
 #include "Engine/Base/WinApp.h"
 #include "Engine/Base/DirectXCommon.h"
+#include "SrvManager.h"
 #include "GameScene.h"
 
 int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
@@ -12,18 +13,16 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	std::unique_ptr<WinApp> winApp = std::make_unique<WinApp>();
 	winApp->Initialize(L"LE2C_12_ショウ_ズーウェン");
 
-	// 2. 【条件1】DirectXCommon の生成と初期化
+	// 2. DirectXCommon の生成と初期化
 	std::unique_ptr<DirectXCommon> dxCommon = std::make_unique<DirectXCommon>();
 	dxCommon->Initialize(winApp.get());
 
-	// TextureManager 等の初期化（【条件4】dxCommon から生ポインタを取り出して渡す）
-	TextureManager::Initialize(
-		dxCommon->GetDevice(),
-		dxCommon->GetCommandList(),
-		dxCommon->GetSrvDescriptorHeap(),
-		dxCommon->GetDescriptorSize(),
-		dxCommon->GetSrvIndexCounter()
-	);
+	// 3. SRVマネージャの生成と初期化
+	std::unique_ptr<SrvManager> srvManager = std::make_unique<SrvManager>();
+	srvManager->Initialize(dxCommon.get());
+
+	// 4. TextureManager の初期化 (シングルトン化 & 引数変更)
+	TextureManager::GetInstance()->Initialize(dxCommon.get(), srvManager.get());
 
 	Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils;
 	Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler;
@@ -101,12 +100,13 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 		DXGI_FORMAT_D24_UNORM_S8_UINT
 	);
 
-	// 3. GameScene の初期化
+	// 5. GameScene の初期化
 	std::unique_ptr<GameScene> gameScene = std::make_unique<GameScene>();
 	gameScene->Initialize(
 		dxCommon->GetDevice(),
 		dxCommon->GetCommandList(),
 		winApp.get(),
+		srvManager.get(),
 		dxCommon->GetSrvDescriptorHeap(),
 		dxCommon->GetDescriptorSize(),
 		dxCommon->GetSrvIndexCounter(),
@@ -125,10 +125,10 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	ImGui::StyleColorsDark();
 	ImGui_ImplWin32_Init(winApp->GetHwnd());
 
-	// 構造体を使って初期化
+	// 構造体を使って初期化 (構文エラー部を修正)
 	ImGui_ImplDX12_InitInfo initInfo = {};
 	initInfo.Device = dxCommon->GetDevice();
-	initInfo.CommandQueue = dxCommon->GetCommandQueue(); // 追加したゲッターを使用
+	initInfo.CommandQueue = dxCommon->GetCommandQueue(); // ★ 混入箇所を修正
 	initInfo.NumFramesInFlight = 2;
 	initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	initInfo.SrvDescriptorHeap = dxCommon->GetSrvDescriptorHeap();
@@ -141,13 +141,14 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	io.Fonts->Build();
 #endif
 
-	// 4. メインループ
+	// 6. メインループ
 	while (!winApp->ProcessMessage())
 	{
 		gameScene->Update();
 
-		// 【条件2】描画前処理（関数呼び出し）
+		// 描画前処理
 		dxCommon->PreDraw();
+		srvManager->PreDraw();
 
 		// RootSignatureのセット
 		dxCommon->GetCommandList()->SetGraphicsRootSignature(rootSignature.Get());
@@ -155,7 +156,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 		// ゲームシーンの描画
 		gameScene->Draw(dxCommon->GetCommandList());
 
-		// 【条件2, 5】描画後処理（関数呼び出し & 60FPS固定）
+		// 描画後処理（60FPS固定）
 		dxCommon->PostDraw();
 	}
 
@@ -167,6 +168,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 	ImGui::DestroyContext();
 #endif
 
+	TextureManager::GetInstance()->Finalize();
 	winApp->Finalize();
 	CoUninitialize();
 	return 0;

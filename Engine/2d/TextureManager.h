@@ -3,46 +3,60 @@
 #include <wrl.h>
 #include <string>
 #include <unordered_map>
-#include <memory>
 #include "externals/DirectXTex/DirectXTex.h"
+
+class DirectXCommon;
+class SrvManager;
 
 class TextureManager {
 public:
-    // 初期化処理
-    static void Initialize(
-        ID3D12Device* device,
-        ID3D12GraphicsCommandList* commandList,
-        ID3D12DescriptorHeap* srvHeap,
-        UINT descriptorSize,
-        uint32_t& srvIndexCounter
-    );
+    // テクスチャ1枚分のデータ構造体
+    struct TextureData {
+        DirectX::TexMetadata metadata;
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        uint32_t srvIndex;
+        D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCPU;
+        D3D12_GPU_DESCRIPTOR_HANDLE srvHandleGPU;
+    };
 
-    // テクスチャをロードしてSRVを作成（既存のパスならキャッシュされたハンドルを返す）
-    static D3D12_GPU_DESCRIPTOR_HANDLE LoadTextureAndCreateSRV(const std::string& filePath);
+    // シングルトンインスタンスの取得
+    static TextureManager* GetInstance();
 
-    // 単体画像データ読み込み・リソース生成関数群
-    static DirectX::ScratchImage LoadTexture(const std::string& filePath);
-    static Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(
+    // 初期化処理 (DirectXCommon と SrvManager を受け取る)
+    void Initialize(DirectXCommon* dxCommon, SrvManager* srvManager);
+
+    // テクスチャの読み込み
+    void LoadTexture(const std::string& filePath);
+
+    // 既存コードとの互換用: ロードして GPU ハンドルを返す関数
+    D3D12_GPU_DESCRIPTOR_HANDLE LoadTextureAndCreateSRV(const std::string& filePath);
+
+    // 各種 getter
+    const DirectX::TexMetadata& GetMetaData(const std::string& filePath);
+    uint32_t GetSrvIndex(const std::string& filePath);
+    D3D12_GPU_DESCRIPTOR_HANDLE GetSrvHandleGPU(const std::string& filePath);
+
+    // 静的リソース・キャッシュの解放
+    void Finalize();
+
+private:
+    TextureManager() = default;
+    ~TextureManager() = default;
+    TextureManager(const TextureManager&) = delete;
+    TextureManager& operator=(const TextureManager&) = delete;
+
+    // 単体画像データ読み込み・リソース生成ヘルパー関数
+    DirectX::ScratchImage LoadTextureFile(const std::string& filePath);
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(
         ID3D12Device* device, const DirectX::TexMetadata& metadata);
-    static void UploadTextureData(
+    void UploadTextureData(
         ID3D12Resource* texture, const DirectX::ScratchImage& mipImages,
         ID3D12Device* device, ID3D12GraphicsCommandList* commandList);
 
-    // デスクリプタハンドル取得関数
-    static D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, UINT descriptorSize, uint32_t index);
-    static D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, UINT descriptorSize, uint32_t index);
-
-    // 静的リソースの解放
-    static void Finalize();
-
 private:
-    static ID3D12Device* sDevice_;
-    static ID3D12GraphicsCommandList* sCommandList_;
-    static ID3D12DescriptorHeap* sSrvHeap_;
-    static UINT sDescriptorSize_;
-    static uint32_t* sSrvIndexCounter_;
+    DirectXCommon* directXCommon_ = nullptr;
+    SrvManager* srvManager_ = nullptr;
 
-    // テクスチャの重複ロードを防止するためのキャッシュ
-    static std::unordered_map<std::string, D3D12_GPU_DESCRIPTOR_HANDLE> sTextureMap_;
-    static std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> sLoadedTextureResources_;
+    // テクスチャデータコンテナ (ファイルパスをキーとした std::unordered_map)
+    std::unordered_map<std::string, TextureData> textureDatas_;
 };

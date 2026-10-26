@@ -29,16 +29,15 @@ D3D12_GPU_DESCRIPTOR_HANDLE ModelLoader::LoadTextureAndCreateSRV(const std::stri
 	if (filePath.empty() || !std::filesystem::exists(filePath, ec) || ec) {
 		return sDefaultTextureSrvHandleGPU_;
 	}
-	return TextureManager::LoadTextureAndCreateSRV(filePath);
+	// ★ GetInstance() 経由の呼び出しに修正
+	return TextureManager::GetInstance()->LoadTextureAndCreateSRV(filePath);
 }
 
 std::shared_ptr<Model> ModelLoader::LoadOBJ(const std::string& directoryPath, const std::string& filename, const std::string& modelName) {
 	assert(sDevice_ && "ModelLoader::Initialize が呼ばれていません。");
 
-	// ★【一括管理】検索キーを作成
 	std::string key = directoryPath + "/" + filename;
 
-	// すでにロード済みの場合はキャッシュされているモデルを返す（ファイルの重複読み込みを防止）
 	auto it = sModelMap_.find(key);
 	if (it != sModelMap_.end()) {
 		return it->second;
@@ -87,7 +86,6 @@ std::shared_ptr<Model> ModelLoader::LoadOBJ(const std::string& directoryPath, co
 		model->instances.push_back(inst);
 	}
 
-	// ★【一括管理】読み込んだモデルをキャッシュマップに登録
 	sModelMap_[key] = model;
 
 	return model;
@@ -107,7 +105,6 @@ std::shared_ptr<Model> ModelLoader::CreateFromOBJ(const std::string& modelName, 
 }
 
 void ModelLoader::Finalize() {
-	// ★【解放処理】キャッシュを削除
 	sModelMap_.clear();
 	sDevice_ = nullptr;
 	sCommandList_ = nullptr;

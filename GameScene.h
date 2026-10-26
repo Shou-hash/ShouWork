@@ -1,5 +1,7 @@
 #pragma once
 #include "Engine/Base/Common.h"
+#include "Engine/2d/TextureManager.h"
+#include "SrvManager.h"
 
 class WinApp;
 
@@ -13,6 +15,7 @@ public:
 		ID3D12Device* device,
 		ID3D12GraphicsCommandList* commandList,
 		WinApp* winApp,
+		SrvManager* srvManager, // ★ SrvManager ポインタを受け取るように追加
 		ID3D12DescriptorHeap* srvDescriptorHeap,
 		UINT descriptorSize,
 		uint32_t& srvIndexCounter,
@@ -36,7 +39,10 @@ public:
 	void DrawImGui();
 
 private:
-	// ★ 共通 RootSignature 保持用ポインタを追加
+	// ★ SrvManager 保持用ポインタ
+	SrvManager* srvManager_ = nullptr;
+
+	// ★ 共通 RootSignature 保持用ポインタ
 	ID3D12RootSignature* rootSignature_ = nullptr;
 
 	// ★ Key関連変数を削除し、Inputクラスのポインタを管理
@@ -50,12 +56,12 @@ private:
 	Sound::SoundData soundData;
 	bool isDebugCamera = false;
 
-	//スプライトの切り取り設定用変数(GameScene.h に追加)
+	//スプライトの切り取り設定用変数
 	Vector2 textureLeftTop = { 0.0f, 0.0f };   // 切り取り開始ピクセル座標 (x, y)
 	Vector2 textureCutSize = { 100.0f, 100.0f }; // 切り取るピクセルサイズ (w, h)
-	Vector2 textureSize    = { 512.0f, 512.0f }; // テクスチャ全体のピクセルサイズ (W, H)
+	Vector2 textureSize = { 512.0f, 512.0f }; // テクスチャ全体のピクセルサイズ (W, H)
 
-	// ★ Particle クラスのインスタンス
+	// Particle クラスのインスタンス
 	std::unique_ptr<Particle> particle_ = nullptr;
 	bool showParticles = true;
 
@@ -119,7 +125,7 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU1{};
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU2{};
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU3{};
-	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleCircle{}; // ★ circle.png 用の SRV ハンドルを追加
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleCircle{};
 	std::vector<std::shared_ptr<Model>> modelEntries;
 	std::shared_ptr<Model> planeModel;
 
@@ -127,7 +133,7 @@ private:
 	Matrix4x4 viewMatrix;
 	Matrix4x4 projectionMatrix;
 
-	// ★【変更】全体共通変数を削除し、各描画オブジェクト用のブレンドモード変数を追加
+	// ブレンドモード変数
 	BlendMode planeBlendMode_ = kBlendModeNormal;  // 中央モデル (Plane) 用
 	BlendMode sphereBlendMode_ = kBlendModeNormal; // 球体 (Sphere) 用
 	BlendMode spriteBlendMode_ = kBlendModeNormal; // スプライト (Sprite) 用

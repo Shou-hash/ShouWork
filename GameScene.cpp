@@ -1,8 +1,9 @@
 #include "GameScene.h"
-#include "Engine/Base/WinApp.h" // ★ WinApp のインクルード
+#include "Engine/Base/WinApp.h"
+#include "Engine/2d/TextureManager.h"
+#include "Engine/Base/SrvManager.h"
 
 GameScene::~GameScene() {
-	// keyboard->Unacquire() などの処理は Input クラスのデストラクタ / 解放処理に任せる
 	if (soundManager) {
 		soundManager->SoundUnload(&soundData);
 	}
@@ -14,6 +15,7 @@ void GameScene::Initialize(
 	ID3D12Device* device,
 	ID3D12GraphicsCommandList* commandList,
 	WinApp* winApp,
+	SrvManager* srvManager, // ★ SrvManager を受け取る
 	ID3D12DescriptorHeap* srvDescriptorHeap,
 	UINT descriptorSize,
 	uint32_t& srvIndexCounter,
@@ -22,7 +24,7 @@ void GameScene::Initialize(
 	IDxcIncludeHandler* dxcIncludeHandler,
 	ID3D12RootSignature* rootSignature
 ) {
-
+	srvManager_ = srvManager;       // ★ 保持
 	rootSignature_ = rootSignature; // ★ 保持
 
 	// サウンドの初期化
@@ -34,7 +36,7 @@ void GameScene::Initialize(
 	// デバッグカメラの初期化
 	debugCamera.Initialize();
 
-	// ★ Inputクラスの生成と初期化
+	// Inputクラスの生成と初期化
 	input_ = std::make_unique<Input>();
 	input_->Initialize(winApp->GetHInstance(), winApp->GetHwnd());
 
@@ -48,7 +50,7 @@ void GameScene::Initialize(
 	// 球体モデルデータの生成
 	InitializeSphere(device);
 
-	// ★ Particleクラスの生成・初期化
+	// Particleクラスの生成・初期化
 	particle_ = std::make_unique<Particle>();
 	particle_->Initialize(device, srvDescriptorHeap, descriptorSize, srvIndexCounter, dxcUtils, dxcCompiler, dxcIncludeHandler);
 }
@@ -74,10 +76,10 @@ void GameScene::InitializeResources(ID3D12Device* device, ID3D12GraphicsCommandL
 	directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
 	directionalLightData->intensity = 1.0f;
 
-	// テクスチャ読み込み
-	textureSrvHandleGPU2 = TextureManager::LoadTextureAndCreateSRV("Resources/monsterBall.png");
-	textureSrvHandleGPU3 = TextureManager::LoadTextureAndCreateSRV("Resources/uvChecker.png");
-	textureSrvHandleCircle = TextureManager::LoadTextureAndCreateSRV("Resources/circle.png"); // ★ circle.png を読み込み
+	// ★ テクスチャ読み込み（TextureManager::GetInstance() 経由で呼び出し）
+	textureSrvHandleGPU2 = TextureManager::GetInstance()->LoadTextureAndCreateSRV("Resources/monsterBall.png");
+	textureSrvHandleGPU3 = TextureManager::GetInstance()->LoadTextureAndCreateSRV("Resources/uvChecker.png");
+	textureSrvHandleCircle = TextureManager::GetInstance()->LoadTextureAndCreateSRV("Resources/circle.png");
 
 	// ModelLoader & ModelDraw の初期化
 	ModelLoader::Initialize(device, commandList, textureSrvHandleGPU3);
@@ -162,22 +164,21 @@ void GameScene::InitializeSphere(ID3D12Device* device) {
 }
 
 void GameScene::Update() {
-	// ★ キーボード状態の更新
+	// キーボード状態の更新
 	input_->Update();
 
-	// ★ デバッグカメラ切り替え判定 (TriggerKeyメンバ関数を使用)
+	// デバッグカメラ切り替え判定
 	if (input_->TriggerKey(DIK_TAB)) {
 		isDebugCamera = !isDebugCamera;
 	}
 
 	if (isDebugCamera) {
-		debugCamera.Update(input_.get()); // 引数に input_ を渡す
+		debugCamera.Update(input_.get());
 		viewMatrix = debugCamera.GetViewMatrix();
 		projectionMatrix = debugCamera.GetProjectionMatrix();
 	}
 
 	// ゲームパッド更新
-	// アロー演算子 (->) で呼び出し
 	if (gamePad) {
 		gamePad->Update();
 		Vector2 lStick = gamePad->GetLeftStick();
@@ -189,17 +190,15 @@ void GameScene::Update() {
 	DrawImGui();
 
 	// --- テクスチャ範囲指定切り取り (UV自動計算) ---
-	// 1. テクスチャ全体に対する切り取り位置・幅高さの比率を計算
 	spriteUVScale.x = textureCutSize.x / textureSize.x;
 	spriteUVScale.y = textureCutSize.y / textureSize.y;
 
 	spriteUVTranslate.x = textureLeftTop.x / textureSize.x;
 	spriteUVTranslate.y = textureLeftTop.y / textureSize.y;
 
-	// 2. 計算したUVスケールと移動量からUV変換行列を生成
 	spriteMaterialData->uvTransform = MakeUVTransformMatrix(spriteUVScale, spriteUVRotate, spriteUVTranslate);
 
-	// ★ Particleの更新
+	// Particleの更新
 	if (particle_ && showParticles) {
 		Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
 		particle_->Update(viewProjectionMatrix);
@@ -293,7 +292,6 @@ void GameScene::DrawImGui() {
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	// ★コンボボックス用のブレンドモード名リスト
 	static const char* blendModeNames[] = {
 		"None (なし)",
 		"Normal (通常α)",
@@ -339,7 +337,6 @@ void GameScene::DrawImGui() {
 						if (ImGui::TreeNode(meshLabel.c_str())) {
 							ImGui::Checkbox("Visible", &inst.visible);
 
-							// ★【追加】OBJモデル インスタンスごとの Blend Mode UI
 							int instBlendIdx = static_cast<int>(inst.blendMode);
 							if (ImGui::Combo("Blend Mode", &instBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {
 								inst.blendMode = static_cast<BlendMode>(instBlendIdx);
@@ -382,8 +379,6 @@ void GameScene::DrawImGui() {
 		if (ImGui::BeginTabItem("Central Model")) {
 			ImGui::Checkbox("Show Central Model", &showModel);
 			if (showModel) {
-
-				// ★【追加】中央モデル用 Blend Mode UI
 				int planeBlendIdx = static_cast<int>(planeBlendMode_);
 				if (ImGui::Combo("Blend Mode", &planeBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {
 					planeBlendMode_ = static_cast<BlendMode>(planeBlendIdx);
@@ -414,7 +409,6 @@ void GameScene::DrawImGui() {
 		if (ImGui::BeginTabItem("Sphere")) {
 			ImGui::Checkbox("Show Sphere", &showSphere);
 			if (showSphere) {
-				// ★【追加】球体用 Blend Mode UI
 				int sphereBlendIdx = static_cast<int>(sphereBlendMode_);
 				if (ImGui::Combo("Blend Mode", &sphereBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {
 					sphereBlendMode_ = static_cast<BlendMode>(sphereBlendIdx);
@@ -448,8 +442,6 @@ void GameScene::DrawImGui() {
 		if (ImGui::BeginTabItem("Sprite")) {
 			ImGui::Checkbox("Show Sprite", &showSprite);
 			if (showSprite) {
-
-				// ★【追加】スプライト用 Blend Mode UI
 				int spriteBlendIdx = static_cast<int>(spriteBlendMode_);
 				if (ImGui::Combo("Blend Mode", &spriteBlendIdx, blendModeNames, IM_ARRAYSIZE(blendModeNames))) {
 					spriteBlendMode_ = static_cast<BlendMode>(spriteBlendIdx);
@@ -485,7 +477,6 @@ void GameScene::DrawImGui() {
 		if (ImGui::BeginTabItem("Particle")) {
 			ImGui::Checkbox("Show Particle", &showParticles);
 			if (showParticles && particle_) {
-				// ★【追加】Particle クラス内の ImGui コントロールを呼び出し
 				particle_->DrawImGui();
 			}
 			ImGui::EndTabItem();
@@ -509,7 +500,6 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 
 	// 1. 中央モデル (Plane) の描画
 	if (showModel && planeModel && !planeModel->instances.empty()) {
-		// ★中央モデル描画直前にパイプラインをセット
 		BlendManager::GetInstance()->SetPipelineState(commandList, planeBlendMode_);
 
 		auto& inst = planeModel->instances[0];
@@ -524,7 +514,6 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 
 	// 2. 球 (Sphere) の描画
 	if (showSphere) {
-		// ★球体描画直前にパイプラインをセット
 		BlendManager::GetInstance()->SetPipelineState(commandList, sphereBlendMode_);
 
 		D3D12_GPU_DESCRIPTOR_HANDLE currentSphereTextureHandle = textureSrvHandleGPU3;
@@ -543,11 +532,11 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 		commandList->DrawInstanced(static_cast<UINT>(sphereVertices.size()), 1, 0, 0);
 	}
 
-	// 3. ★【Particleの描画】
+	// 3. Particleの描画
 	if (particle_ && showParticles) {
-		particle_->Draw(commandList, textureSrvHandleCircle); // ★ circle.png の SRV ハンドルを渡す
+		particle_->Draw(commandList, textureSrvHandleCircle);
 
-		// ★ Particle専用RootSignatureから共通RootSignatureへ復元！
+		// Particle専用RootSignatureから共通RootSignatureへ復元
 		commandList->SetGraphicsRootSignature(rootSignature_);
 	}
 
@@ -567,7 +556,7 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 		commandList->SetGraphicsRootConstantBufferView(0, spriteMaterialResource->GetGPUVirtualAddress());
 		commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
 		commandList->SetGraphicsRootConstantBufferView(2, spriteWvpResource->GetGPUVirtualAddress());
-		commandList->SetGraphicsRootDescriptorTable(3, currentSpriteTextureHandle); // 正常にセット可能になります
+		commandList->SetGraphicsRootDescriptorTable(3, currentSpriteTextureHandle);
 		commandList->IASetVertexBuffers(0, 1, &inst.vertexBufferView);
 		commandList->DrawInstanced(inst.vertexCount, 1, 0, 0);
 	}

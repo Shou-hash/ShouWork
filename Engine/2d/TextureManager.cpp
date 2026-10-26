@@ -1,62 +1,85 @@
 #include "TextureManager.h"
-#include "Engine/base/ConvertString.h"
+#include "Engine/Base/DirectXCommon.h"
+#include "Engine/Base/SrvManager.h"
+#include "Engine/Base/ConvertString.h"
 #include <cassert>
-#include <filesystem>
 
-ID3D12Device* TextureManager::sDevice_ = nullptr;
-ID3D12GraphicsCommandList* TextureManager::sCommandList_ = nullptr;
-ID3D12DescriptorHeap* TextureManager::sSrvHeap_ = nullptr;
-UINT TextureManager::sDescriptorSize_ = 0;
-uint32_t* TextureManager::sSrvIndexCounter_ = nullptr;
-std::unordered_map<std::string, D3D12_GPU_DESCRIPTOR_HANDLE> TextureManager::sTextureMap_{};
-std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> TextureManager::sLoadedTextureResources_{};
+TextureManager* TextureManager::GetInstance() {
+    static TextureManager instance;
+    return &instance;
+}
 
-void TextureManager::Initialize(
-    ID3D12Device* device,
-    ID3D12GraphicsCommandList* commandList,
-    ID3D12DescriptorHeap* srvHeap,
-    UINT descriptorSize,
-    uint32_t& srvIndexCounter)
-{
-    sDevice_ = device;
-    sCommandList_ = commandList;
-    sSrvHeap_ = srvHeap;
-    sDescriptorSize_ = descriptorSize;
-    sSrvIndexCounter_ = &srvIndexCounter;
+void TextureManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) {
+    assert(dxCommon);
+    assert(srvManager);
+    directXCommon_ = dxCommon;
+    srvManager_ = srvManager;
+}
+
+void TextureManager::LoadTexture(const std::string& filePath) {
+    // 読み込み済みチェック (contains で検索)
+    if (textureDatas_.contains(filePath)) {
+        return;
+    }
+
+    assert(directXCommon_ && srvManager_ && "TextureManager::Initialize が呼び出されていません。");
+
+    // 1. テクスチャファイルの読み込み
+    DirectX::ScratchImage mipImages = LoadTextureFile(filePath);
+    const DirectX::TexMetadata& metadata = mipImages.GetMetadata();
+
+    // 2. Resource の生成
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource = CreateTextureResource(directXCommon_->GetDevice(), metadata);
+
+    // 3. テクスチャデータの転送
+    UploadTextureData(resource.Get(), mipImages, directXCommon_->GetDevice(), directXCommon_->GetCommandList());
+
+    // 4. テクスチャデータをマップに追加
+    TextureData& textureData = textureDatas_[filePath];
+    textureData.metadata = metadata;
+    textureData.resource = resource;
+
+    // SrvManager から SRV インデックスを割り当ててハンドルを取得
+    textureData.srvIndex = srvManager_->Allocate();
+    textureData.srvHandleCPU = srvManager_->GetCPUDescriptorHandle(textureData.srvIndex);
+    textureData.srvHandleGPU = srvManager_->GetGPUDescriptorHandle(textureData.srvIndex);
+
+    // SRV の生成
+    srvManager_->CreateSRVforTexture2D(
+        textureData.srvIndex,
+        textureData.resource.Get(),
+        metadata.format,
+        static_cast<UINT>(metadata.mipLevels)
+    );
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::LoadTextureAndCreateSRV(const std::string& filePath) {
-    // 読み込み済み（キャッシュ存在）ならそのGPUハンドルを返す
-    auto it = sTextureMap_.find(filePath);
-    if (it != sTextureMap_.end()) {
-        return it->second;
-    }
-
-    assert(sDevice_ && sSrvIndexCounter_ && "TextureManager::Initialize が呼出されていません。");
-
-    DirectX::ScratchImage mTexImages = LoadTexture(filePath);
-    Microsoft::WRL::ComPtr<ID3D12Resource> tResource = CreateTextureResource(sDevice_, mTexImages.GetMetadata());
-    UploadTextureData(tResource.Get(), mTexImages, sDevice_, sCommandList_);
-
-    uint32_t currentIndex = (*sSrvIndexCounter_)++;
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuSrvHandle = GetGPUDescriptorHandle(sSrvHeap_, sDescriptorSize_, currentIndex);
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuSrvHandle = GetCPUDescriptorHandle(sSrvHeap_, sDescriptorSize_, currentIndex);
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-    srvDesc.Format = mTexImages.GetMetadata().format;
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = static_cast<UINT>(mTexImages.GetMetadata().mipLevels);
-
-    sDevice_->CreateShaderResourceView(tResource.Get(), &srvDesc, cpuSrvHandle);
-
-    sLoadedTextureResources_.push_back(tResource);
-    sTextureMap_[filePath] = gpuSrvHandle;
-
-    return gpuSrvHandle;
+    LoadTexture(filePath);
+    return GetSrvHandleGPU(filePath);
 }
 
-DirectX::ScratchImage TextureManager::LoadTexture(const std::string& filePath) {
+const DirectX::TexMetadata& TextureManager::GetMetaData(const std::string& filePath) {
+    assert(textureDatas_.contains(filePath));
+    return textureDatas_[filePath].metadata;
+}
+
+uint32_t TextureManager::GetSrvIndex(const std::string& filePath) {
+    assert(textureDatas_.contains(filePath));
+    return textureDatas_[filePath].srvIndex;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetSrvHandleGPU(const std::string& filePath) {
+    assert(textureDatas_.contains(filePath));
+    return textureDatas_[filePath].srvHandleGPU;
+}
+
+void TextureManager::Finalize() {
+    textureDatas_.clear();
+    directXCommon_ = nullptr;
+    srvManager_ = nullptr;
+}
+
+DirectX::ScratchImage TextureManager::LoadTextureFile(const std::string& filePath) {
     DirectX::ScratchImage image{};
     std::wstring filePathW = ConvertString(filePath);
     HRESULT hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_NONE, nullptr, image);
@@ -86,8 +109,8 @@ Microsoft::WRL::ComPtr<ID3D12Resource> TextureManager::CreateTextureResource(ID3
 
     Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
     HRESULT hr = device->CreateCommittedResource(
-        &heapProperties, 
-        D3D12_HEAP_FLAG_NONE, 
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
         &resourceDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
@@ -105,24 +128,4 @@ void TextureManager::UploadTextureData(ID3D12Resource* texture, const DirectX::S
         HRESULT hr = texture->WriteToSubresource(static_cast<UINT>(mip), nullptr, img->pixels, static_cast<UINT>(img->rowPitch), static_cast<UINT>(img->slicePitch));
         assert(SUCCEEDED(hr));
     }
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE TextureManager::GetCPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, UINT descriptorSize, uint32_t index) {
-    D3D12_CPU_DESCRIPTOR_HANDLE handle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-    handle.ptr += static_cast<SIZE_T>(descriptorSize) * index;
-    return handle;
-}
-
-D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetGPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, UINT descriptorSize, uint32_t index) {
-    D3D12_GPU_DESCRIPTOR_HANDLE handle = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-    handle.ptr += static_cast<SIZE_T>(descriptorSize) * index;
-    return handle;
-}
-
-void TextureManager::Finalize() {
-    sLoadedTextureResources_.clear();
-    sTextureMap_.clear();
-    sDevice_ = nullptr;
-    sCommandList_ = nullptr;
-    sSrvHeap_ = nullptr;
 }
