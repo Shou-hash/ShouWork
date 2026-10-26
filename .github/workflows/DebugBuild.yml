@@ -6,9 +6,8 @@ on:
       - master
 
 env:
-  # リポジトリのルートディレクトリを基点としたソリューションファイルのパス
-  SOLUTION_FILE_PATH: project/CG2.sln
-  # Visual Studio の構成 (Debug / Release)
+  # ご自身のリポジトリの実際の .sln パスに変更してください
+  SOLUTION_FILE_PATH: CG2.sln   # ← 例：ルート直下に CG2.sln がある場合
   CONFIGURATION: Debug
 
 jobs:
