@@ -196,9 +196,18 @@ void Particle::CreateRootSignatureAndPSO(
 	assert(SUCCEEDED(hr));
 }
 
-void Particle::Update(const Matrix4x4& viewProjectionMatrix) {
+void Particle::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+
 	const float kDeltaTime = 1.0f / 60.0f;
 	uint32_t numInstance = 0; // 描画すべきインスタンス数
+
+	// 全Particle共通。view行列の回転部の転置 = カメラの回転(平行移動なし)
+	Matrix4x4 billboardMatrix = MakeIdentity4x4();
+	for (int i = 0; i < 3; ++i)
+		for (int j = 0; j < 3; ++j)
+			billboardMatrix.m[i][j] = viewMatrix.m[j][i];
+	Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
+
 
 	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
 		// 生存期間を過ぎていたら更新せず描画対象にしない
@@ -215,7 +224,10 @@ void Particle::Update(const Matrix4x4& viewProjectionMatrix) {
 		particles_[index].currentTime += kDeltaTime;
 
 		// 行列計算
-		Matrix4x4 worldMatrix = MakeAffineMatrix(particles_[index].transform.scale, particles_[index].transform.rotate, particles_[index].transform.translate);
+		const auto& t = particles_[index].transform;
+		Matrix4x4 worldMatrix = useBillboard_
+			? Multiply(Multiply(MakeScaleMatrix(t.scale), billboardMatrix), MakeTranslateMatrix(t.translate))
+			: MakeAffineMatrix(t.scale, t.rotate, t.translate);
 		Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, viewProjectionMatrix);
 
 		// GPU転送バッファにセット
@@ -252,6 +264,9 @@ void Particle::Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR
 
 void Particle::DrawImGui() {
 #ifdef USE_IMGUI
+
+	ImGui::Checkbox("useBillboard", &useBillboard_);
+
 	if (ImGui::Button("Respawn All Particles")) {
 		for (uint32_t i = 0; i < kNumMaxInstance; ++i) {
 			particles_[i] = MakeNewParticle(randomEngine_);

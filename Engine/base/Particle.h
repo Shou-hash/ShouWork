@@ -42,7 +42,7 @@ public:
 	);
 
 	// 更新
-	void Update(const Matrix4x4& viewProjectionMatrix);
+	void Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix); // 変更
 
 	// 描画
 	void Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU);
@@ -92,4 +92,6 @@ private:
 	// Particle用パイプライン設定
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+
+	bool useBillboard_ = true;
 };

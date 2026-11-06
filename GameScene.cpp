@@ -200,8 +200,7 @@ void GameScene::Update() {
 
 	// Particleの更新
 	if (particle_ && showParticles) {
-		Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
-		particle_->Update(viewProjectionMatrix);
+		particle_->Update(viewMatrix, projectionMatrix);
 	}
 
 	// Transform & 行列計算の更新
