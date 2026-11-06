@@ -1,9 +1,13 @@
+#include "Engine/Base/Common.h"
 #include "ImGuiManager.h"
-#include "Engine/Base/Common.h" // ImguiCode.h(imgui本体 + impl_win32 + impl_dx12)も含まれる
 #include "SrvManager.h"
 
-void ImGuiManager::Initialize(WinApp* winApp, DirectXCommon* dxCommon, SrvManager* srvManager)
+void ImGuiManager::Initialize([[maybe_unused]] WinApp* winApp, DirectXCommon* dxCommon, [[maybe_unused]] SrvManager* srvManager)
 {
+	dxCommon_ = dxCommon;
+	srvHeap_ = dxCommon->GetSrvDescriptorHeap();
+
+#ifdef USE_IMGUI
 	// コンテキスト生成・スタイル設定
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -19,7 +23,7 @@ void ImGuiManager::Initialize(WinApp* winApp, DirectXCommon* dxCommon, SrvManage
 	initInfo.NumFramesInFlight = static_cast<int>(dxCommon->GetSwapChainResourcesNum());
 	initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	initInfo.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	initInfo.SrvDescriptorHeap = dxCommon->GetSrvDescriptorHeap();
+	initInfo.SrvDescriptorHeap = srvHeap_;
 
 	// SrvManagerはシングルトンではないのでUserData経由で渡す
 	initInfo.UserData = srvManager;
@@ -36,11 +40,44 @@ void ImGuiManager::Initialize(WinApp* winApp, DirectXCommon* dxCommon, SrvManage
 	initInfo.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE) {};
 
 	ImGui_ImplDX12_Init(&initInfo);
+#endif
 }
 
 void ImGuiManager::Finalize()
 {
+#ifdef USE_IMGUI
+	// 初期化と逆順
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
+#endif
+}
+
+void ImGuiManager::Begin()
+{
+#ifdef USE_IMGUI
+	ImGui_ImplDX12_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+#endif
+}
+
+void ImGuiManager::End()
+{
+#ifdef USE_IMGUI
+	// 描画前準備(表示データをまとめるだけ。GPUへは書かない)
+	ImGui::Render();
+#endif
+}
+
+void ImGuiManager::Draw()
+{
+#ifdef USE_IMGUI
+	ID3D12GraphicsCommandList* commandList = dxCommon_->GetCommandList();
+
+	// デスクリプタヒープをセットしてから描画コマンドを発行
+	ID3D12DescriptorHeap* ppHeaps[] = { srvHeap_ };
+	commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+#endif
 }

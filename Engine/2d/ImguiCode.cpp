@@ -1,4 +1,4 @@
-#include "ImguiCode.h"
+#include "Engine/2d/ImguiCode.h"
 
 // 例: 将来的にクラスとしてまとめる場合のラッパー実装
 void Imgui::Initialize() {
