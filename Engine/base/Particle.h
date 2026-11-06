@@ -1,6 +1,7 @@
 #pragma once
 #include "Common.h"
 #include <random>
+#include <list>
 
 // ★ GPUに転送するデータ構造体
 struct ParticleForGPU {
@@ -18,6 +19,13 @@ struct ParticleData {
 	float currentTime;
 };
 
+struct Emitter {
+	struct Transform transform { { 1, 1, 1 }, { 0,0,0 }, { 0,0,0 } };
+	uint32_t count = 3;        // 1回の発生数
+	float frequency = 0.5f;    // 発生頻度(秒)
+	float frequencyTime = 0.0f;
+};
+
 // =========================================================
 // Particle クラス（Instancing描画管理）
 // =========================================================
@@ -25,7 +33,7 @@ class Particle
 {
 public:
 	// ★ 最大インスタンス数（資料に従い kNumMaxInstance に変更）
-	static const uint32_t kNumMaxInstance = 10;
+	static const uint32_t kNumMaxInstance = 100;
 
 	Particle() = default;
 	~Particle() = default;
@@ -51,7 +59,9 @@ public:
 	void DrawImGui();
 
 	// 新しい Particle を生成する関数
-	ParticleData MakeNewParticle(std::mt19937& randomEngine);
+	ParticleData MakeNewParticle(std::mt19937& randomEngine, const Vector3& translate); // 引数追加
+
+	std::list<ParticleData> Emit(const Emitter& emitter, std::mt19937& randomEngine);   // 追加
 
 private:
 	// Particle専用の RootSignature と PipelineState の作成
@@ -80,7 +90,8 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_{};
 
 	// インスタンスごとの Particle 情報
-	ParticleData particles_[kNumMaxInstance];
+	std::list<ParticleData> particles_;
+	Emitter emitter_;
 
 	// ★ 実際に描画すべきインスタンス数
 	uint32_t numInstance_ = 0;

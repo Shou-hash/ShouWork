@@ -1,7 +1,8 @@
 #include "Particle.h"
 
 // 新しい Particle を生成する関数
-ParticleData Particle::MakeNewParticle(std::mt19937& randomEngine) {
+ParticleData Particle::MakeNewParticle(std::mt19937& randomEngine, const Vector3& translate) {
+
 	std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
 	std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
 	std::uniform_real_distribution<float> distTime(1.0f, 3.0f);
@@ -9,12 +10,24 @@ ParticleData Particle::MakeNewParticle(std::mt19937& randomEngine) {
 	ParticleData particle;
 	particle.transform.scale = { 1.0f, 1.0f, 1.0f };
 	particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
-	particle.transform.translate = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
+
+	particle.transform.translate = { 
+		translate.x + distribution(randomEngine),
+		translate.y + distribution(randomEngine),
+		translate.z + distribution(randomEngine) };
+
 	particle.velocity = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
 	particle.color = { distColor(randomEngine), distColor(randomEngine), distColor(randomEngine), 1.0f };
 	particle.lifeTime = distTime(randomEngine);
 	particle.currentTime = 0.0f;
 	return particle;
+}
+
+std::list<ParticleData> Particle::Emit(const Emitter& emitter, std::mt19937& randomEngine) {
+	std::list<ParticleData> particles;
+	for (uint32_t i = 0; i < emitter.count; ++i)
+		particles.push_back(MakeNewParticle(randomEngine, emitter.transform.translate));
+	return particles;
 }
 
 void Particle::Initialize(
@@ -77,10 +90,6 @@ void Particle::Initialize(
 
 	device->CreateShaderResourceView(instancingResource_.Get(), &instancingSrvDesc, instancingSrvHandleCPU_);
 
-	// 6. Particle の初期化
-	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
-		particles_[index] = MakeNewParticle(randomEngine_);
-	}
 }
 
 void Particle::CreateRootSignatureAndPSO(
@@ -197,52 +206,47 @@ void Particle::CreateRootSignatureAndPSO(
 }
 
 void Particle::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
-
 	const float kDeltaTime = 1.0f / 60.0f;
-	uint32_t numInstance = 0; // 描画すべきインスタンス数
 
-	// 全Particle共通。view行列の回転部の転置 = カメラの回転(平行移動なし)
+	// 頻度による発生
+	emitter_.frequencyTime += kDeltaTime;
+	if (emitter_.frequency <= emitter_.frequencyTime) {
+		particles_.splice(particles_.end(), Emit(emitter_, randomEngine_));
+		emitter_.frequencyTime -= emitter_.frequency;
+	}
+
 	Matrix4x4 billboardMatrix = MakeIdentity4x4();
 	for (int i = 0; i < 3; ++i)
 		for (int j = 0; j < 3; ++j)
 			billboardMatrix.m[i][j] = viewMatrix.m[j][i];
 	Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
 
-
-	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
-		// 生存期間を過ぎていたら更新せず描画対象にしない
-		if (particles_[index].lifeTime <= particles_[index].currentTime) {
+	uint32_t numInstance = 0;
+	for (auto it = particles_.begin(); it != particles_.end();) {
+		if (it->lifeTime <= it->currentTime) {
+			it = particles_.erase(it); // 寿命切れは消す(戻り値が次の要素)
 			continue;
 		}
 
-		// 速度を位置に反映
-		particles_[index].transform.translate.x += particles_[index].velocity.x * kDeltaTime;
-		particles_[index].transform.translate.y += particles_[index].velocity.y * kDeltaTime;
-		particles_[index].transform.translate.z += particles_[index].velocity.z * kDeltaTime;
+		it->transform.translate.x += it->velocity.x * kDeltaTime;
+		it->transform.translate.y += it->velocity.y * kDeltaTime;
+		it->transform.translate.z += it->velocity.z * kDeltaTime;
+		it->currentTime += kDeltaTime;
 
-		// 経過時間を足す
-		particles_[index].currentTime += kDeltaTime;
-
-		// 行列計算
-		const auto& t = particles_[index].transform;
-		Matrix4x4 worldMatrix = useBillboard_
-			? Multiply(Multiply(MakeScaleMatrix(t.scale), billboardMatrix), MakeTranslateMatrix(t.translate))
-			: MakeAffineMatrix(t.scale, t.rotate, t.translate);
-		Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, viewProjectionMatrix);
-
-		// GPU転送バッファにセット
-		instancingData_[numInstance].WVP = worldViewProjectionMatrix;
-		instancingData_[numInstance].World = worldMatrix;
-		instancingData_[numInstance].color = particles_[index].color;
-
-		// ★ α値を徐々に0に近づける
-		float alpha = 1.0f - (particles_[index].currentTime / particles_[index].lifeTime);
-		instancingData_[numInstance].color.w = alpha;
-
-		// 生きているParticleの数を1つカウントする
-		++numInstance;
+		// GPUバッファの最大数を超えたら書き込まない(バッファオーバーラン対策)
+		if (numInstance < kNumMaxInstance) {
+			const auto& t = it->transform;
+			Matrix4x4 worldMatrix = useBillboard_
+				? Multiply(Multiply(MakeScaleMatrix(t.scale), billboardMatrix), MakeTranslateMatrix(t.translate))
+				: MakeAffineMatrix(t.scale, t.rotate, t.translate);
+			instancingData_[numInstance].WVP = Multiply(worldMatrix, viewProjectionMatrix);
+			instancingData_[numInstance].World = worldMatrix;
+			instancingData_[numInstance].color = it->color;
+			instancingData_[numInstance].color.w = 1.0f - (it->currentTime / it->lifeTime);
+			++numInstance;
+		}
+		++it; // erase しなかったときだけ進める
 	}
-
 	numInstance_ = numInstance;
 }
 
@@ -264,12 +268,21 @@ void Particle::Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR
 
 void Particle::DrawImGui() {
 #ifdef USE_IMGUI
-
 	ImGui::Checkbox("useBillboard", &useBillboard_);
 
-	if (ImGui::Button("Respawn All Particles")) {
-		for (uint32_t i = 0; i < kNumMaxInstance; ++i) {
-			particles_[i] = MakeNewParticle(randomEngine_);
+	if (ImGui::CollapsingHeader("Emitter", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::DragFloat3("EmitterTranslate", &emitter_.transform.translate.x, 0.01f, -100.0f, 100.0f);
+		int count = static_cast<int>(emitter_.count);
+		if (ImGui::DragInt("Count", &count, 1, 1, static_cast<int>(kNumMaxInstance))) {
+			emitter_.count = static_cast<uint32_t>(count);
+		}
+		ImGui::DragFloat("Frequency", &emitter_.frequency, 0.01f, 0.01f, 10.0f);
+		if (ImGui::Button("Add Particle")) {
+			particles_.splice(particles_.end(), Emit(emitter_, randomEngine_));
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Clear")) {
+			particles_.clear();
 		}
 	}
 
@@ -285,24 +298,21 @@ void Particle::DrawImGui() {
 	}
 
 	if (ImGui::CollapsingHeader("Instances Parameter", ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::Text("Active Particles: %u / %u", numInstance_, kNumMaxInstance);
-		for (uint32_t i = 0; i < kNumMaxInstance; ++i) {
-			ImGui::PushID(static_cast<int>(i));
-			std::string label = std::format("Particle Instance {}", i);
-
-			if (ImGui::TreeNode(label.c_str())) {
-				ImGui::ColorEdit4("Color", &particles_[i].color.x);
-				ImGui::SliderFloat3("Position", &particles_[i].transform.translate.x, -10.0f, 10.0f);
-				ImGui::SliderFloat3("Velocity", &particles_[i].velocity.x, -5.0f, 5.0f);
-				ImGui::SliderFloat3("Rotate", &particles_[i].transform.rotate.x, -3.14f, 3.14f);
-				ImGui::SliderFloat3("Scale", &particles_[i].transform.scale.x, 0.01f, 5.0f);
-				ImGui::Text("LifeTime: %.2f / %.2f s", particles_[i].currentTime, particles_[i].lifeTime);
-				if (ImGui::Button("Reset / Respawn")) {
-					particles_[i] = MakeNewParticle(randomEngine_);
-				}
+		ImGui::Text("Drawn: %u / %u (list size: %zu)", numInstance_, kNumMaxInstance, particles_.size());
+		int id = 0;
+		for (auto& p : particles_) {
+			ImGui::PushID(id);
+			if (ImGui::TreeNode(std::format("Particle Instance {}", id).c_str())) {
+				ImGui::ColorEdit4("Color", &p.color.x);
+				ImGui::SliderFloat3("Position", &p.transform.translate.x, -10.0f, 10.0f);
+				ImGui::SliderFloat3("Velocity", &p.velocity.x, -5.0f, 5.0f);
+				ImGui::SliderFloat3("Rotate", &p.transform.rotate.x, -3.14f, 3.14f);
+				ImGui::SliderFloat3("Scale", &p.transform.scale.x, 0.01f, 5.0f);
+				ImGui::Text("LifeTime: %.2f / %.2f s", p.currentTime, p.lifeTime);
 				ImGui::TreePop();
 			}
 			ImGui::PopID();
+			++id;
 		}
 	}
 #endif
