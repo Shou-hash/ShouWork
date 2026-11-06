@@ -1,5 +1,11 @@
 #include "Particle.h"
 
+static bool IsCollision(const AABB& aabb, const Vector3& point) {
+	return aabb.min.x <= point.x && point.x <= aabb.max.x &&
+		aabb.min.y <= point.y && point.y <= aabb.max.y &&
+		aabb.min.z <= point.z && point.z <= aabb.max.z;
+}
+
 // 新しい Particle を生成する関数
 ParticleData Particle::MakeNewParticle(std::mt19937& randomEngine, const Vector3& translate) {
 
@@ -228,6 +234,13 @@ void Particle::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMa
 			continue;
 		}
 
+		// Fieldの範囲内のParticleには加速度を適用する
+		if (useField_ && IsCollision(accelerationField_.area, it->transform.translate)) {
+			it->velocity.x += accelerationField_.acceleration.x * kDeltaTime;
+			it->velocity.y += accelerationField_.acceleration.y * kDeltaTime;
+			it->velocity.z += accelerationField_.acceleration.z * kDeltaTime;
+		}
+
 		it->transform.translate.x += it->velocity.x * kDeltaTime;
 		it->transform.translate.y += it->velocity.y * kDeltaTime;
 		it->transform.translate.z += it->velocity.z * kDeltaTime;
@@ -284,6 +297,13 @@ void Particle::DrawImGui() {
 		if (ImGui::Button("Clear")) {
 			particles_.clear();
 		}
+	}
+
+	if (ImGui::CollapsingHeader("Acceleration Field", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Checkbox("useField", &useField_);
+		ImGui::DragFloat3("Acceleration", &accelerationField_.acceleration.x, 0.1f);
+		ImGui::DragFloat3("Area Min", &accelerationField_.area.min.x, 0.01f);
+		ImGui::DragFloat3("Area Max", &accelerationField_.area.max.x, 0.01f);
 	}
 
 	if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {

@@ -26,6 +26,13 @@ struct Emitter {
 	float frequencyTime = 0.0f;
 };
 
+struct AABB { Vector3 min; Vector3 max; };
+
+struct AccelerationField {
+	Vector3 acceleration;  // 加速度
+	AABB area;             // 範囲
+};
+
 // =========================================================
 // Particle クラス（Instancing描画管理）
 // =========================================================
@@ -105,4 +112,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 
 	bool useBillboard_ = true;
+
+	AccelerationField accelerationField_{ { 15.0f, 0.0f, 0.0f }, { { -1.0f, -1.0f, -1.0f }, { 1.0f, 1.0f, 1.0f } } };
+	bool useField_ = true;
 };
