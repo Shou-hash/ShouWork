@@ -67,6 +67,7 @@ public:
 	ID3D12DescriptorHeap* GetSrvDescriptorHeap() const { return srvDescriptorHeap_.Get(); }
 	UINT GetDescriptorSize() const { return descriptorSize_; }
 	uint32_t& GetSrvIndexCounter() { return srvIndexCounter_; }
+	size_t GetSwapChainResourcesNum() const { return _countof(swapChainResources_); } // ← 追加
 
 private:
 	void InitializeDevice();
