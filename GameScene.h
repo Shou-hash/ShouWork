@@ -1,7 +1,7 @@
 #pragma once
 #include "Engine/Base/Common.h"
 #include "Engine/2d/TextureManager.h"
-#include "SrvManager.h"
+#include "Engine/base/SrvManager.h"
 
 class WinApp;
 
@@ -15,10 +15,7 @@ public:
 		ID3D12Device* device,
 		ID3D12GraphicsCommandList* commandList,
 		WinApp* winApp,
-		SrvManager* srvManager, // ★ SrvManager ポインタを受け取るように追加
-		ID3D12DescriptorHeap* srvDescriptorHeap,
-		UINT descriptorSize,
-		uint32_t& srvIndexCounter,
+		SrvManager* srvManager,
 		IDxcUtils* dxcUtils,
 		IDxcCompiler3* dxcCompiler,
 		IDxcIncludeHandler* dxcIncludeHandler,

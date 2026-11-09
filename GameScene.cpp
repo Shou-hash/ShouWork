@@ -16,10 +16,7 @@ void GameScene::Initialize(
 	ID3D12Device* device,
 	ID3D12GraphicsCommandList* commandList,
 	WinApp* winApp,
-	SrvManager* srvManager, // ★ SrvManager を受け取る
-	ID3D12DescriptorHeap* srvDescriptorHeap,
-	UINT descriptorSize,
-	uint32_t& srvIndexCounter,
+	SrvManager* srvManager,
 	IDxcUtils* dxcUtils,
 	IDxcCompiler3* dxcCompiler,
 	IDxcIncludeHandler* dxcIncludeHandler,
