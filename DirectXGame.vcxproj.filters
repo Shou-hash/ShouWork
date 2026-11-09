@@ -45,9 +45,6 @@
     <ClCompile Include="main.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\2d\ImguiCode.cpp">
-      <Filter>Engine\2d</Filter>
-    </ClCompile>
     <ClCompile Include="Engine\base\ConvertString.cpp">
       <Filter>Engine\bese</Filter>
     </ClCompile>
@@ -101,9 +98,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Engine\2d\ImguiCode.h">
-      <Filter>Engine\2d</Filter>
-    </ClInclude>
     <ClInclude Include="Engine\base\Common.h">
       <Filter>Engine\bese</Filter>
     </ClInclude>

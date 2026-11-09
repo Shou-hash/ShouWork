@@ -3,6 +3,8 @@
 #include <random>
 #include <list>
 
+class SrvManager;
+
 // ★ GPUに転送するデータ構造体
 struct ParticleForGPU {
 	Matrix4x4 WVP;
@@ -48,9 +50,7 @@ public:
 	// 初期化
 	void Initialize(
 		ID3D12Device* device,
-		ID3D12DescriptorHeap* srvDescriptorHeap,
-		UINT descriptorSize,
-		uint32_t& srvIndexCounter,
+		SrvManager* srvManager, // TextureManager/ImGuiと同じSrvManagerのヒープにSRVを確保する
 		IDxcUtils* dxcUtils,
 		IDxcCompiler3* dxcCompiler,
 		IDxcIncludeHandler* dxcIncludeHandler
@@ -92,8 +92,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_;
 	ParticleForGPU* instancingData_ = nullptr;
 
-	// SRV用ハンドル
-	D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU_{};
+	// SRV用ハンドル(GPU側だけ保持)
 	D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_{};
 
 	// インスタンスごとの Particle 情報

@@ -1,11 +1,11 @@
 #include "Engine/Base/Common.h"
 #include "ImGuiManager.h"
-#include "SrvManager.h"
+#include "Engine/Base/SrvManager.h"
 
-void ImGuiManager::Initialize([[maybe_unused]] WinApp* winApp, DirectXCommon* dxCommon, [[maybe_unused]] SrvManager* srvManager)
+void ImGuiManager::Initialize([[maybe_unused]] WinApp* winApp, DirectXCommon* dxCommon, SrvManager* srvManager)
 {
 	dxCommon_ = dxCommon;
-	srvHeap_ = dxCommon->GetSrvDescriptorHeap();
+	srvHeap_ = srvManager->GetDescriptorHeap(); // SrvManager側のヒープ
 
 #ifdef USE_IMGUI
 	// コンテキスト生成・スタイル設定

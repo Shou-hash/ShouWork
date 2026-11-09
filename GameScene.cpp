@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include "Engine/2d/ImGuiManager.h"
 #include "Engine/Base/WinApp.h"
 #include "Engine/2d/TextureManager.h"
 #include "Engine/Base/SrvManager.h"
@@ -52,7 +53,7 @@ void GameScene::Initialize(
 
 	// Particleクラスの生成・初期化
 	particle_ = std::make_unique<Particle>();
-	particle_->Initialize(device, srvDescriptorHeap, descriptorSize, srvIndexCounter, dxcUtils, dxcCompiler, dxcIncludeHandler);
+	particle_->Initialize(device, srvManager, dxcUtils, dxcCompiler, dxcIncludeHandler);
 }
 
 void GameScene::InitializeResources(ID3D12Device* device, ID3D12GraphicsCommandList* commandList) {
@@ -287,10 +288,6 @@ void GameScene::Update() {
 
 void GameScene::DrawImGui() {
 #ifdef USE_IMGUI
-	ImGui_ImplDX12_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
-
 	static const char* blendModeNames[] = {
 		"None (なし)",
 		"Normal (通常α)",
@@ -484,7 +481,6 @@ void GameScene::DrawImGui() {
 		ImGui::EndTabBar();
 	}
 	ImGui::End();
-	ImGui::Render();
 #endif
 }
 
@@ -560,7 +556,4 @@ void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
 		commandList->DrawInstanced(inst.vertexCount, 1, 0, 0);
 	}
 
-#ifdef USE_IMGUI
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
-#endif
 }

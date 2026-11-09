@@ -160,7 +160,6 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\2d\ImguiCode.cpp" />
     <ClCompile Include="Engine\2d\ImGuiManager.cpp" />
     <ClCompile Include="Engine\2d\TextureManager.cpp" />
     <ClCompile Include="Engine\3d\DebugCamera.cpp" />
@@ -184,7 +183,6 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="Engine\base\Particle.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Engine\2d\ImguiCode.h" />
     <ClInclude Include="Engine\2d\ImGuiManager.h" />
     <ClInclude Include="Engine\2d\TextureManager.h" />
     <ClInclude Include="Engine\3d\DebugCamera.h" />

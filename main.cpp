@@ -3,6 +3,7 @@
 #include "Engine/Base/DirectXCommon.h"
 #include "SrvManager.h"
 #include "GameScene.h"
+#include "Engine/2d/ImGuiManager.h"
 
 int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
@@ -116,35 +117,20 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 		rootSignature.Get()
 	);
 
-#ifdef USE_IMGUI
-	D3D12_CPU_DESCRIPTOR_HANDLE imguiSrvHandleCPU = GetCPUDescriptorHandle(dxCommon->GetSrvDescriptorHeap(), dxCommon->GetDescriptorSize(), dxCommon->GetSrvIndexCounter());
-	D3D12_GPU_DESCRIPTOR_HANDLE imguiSrvHandleGPU = GetGPUDescriptorHandle(dxCommon->GetSrvDescriptorHeap(), dxCommon->GetDescriptorSize(), dxCommon->GetSrvIndexCounter()++);
+	// 6. ImGuiManager の初期化(USE_IMGUI未定義のビルドでは中身が空)
+	std::unique_ptr<ImGuiManager> imguiManager = std::make_unique<ImGuiManager>();
+	imguiManager->Initialize(winApp.get(), dxCommon.get(), srvManager.get());
 
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGui::StyleColorsDark();
-	ImGui_ImplWin32_Init(winApp->GetHwnd());
-
-	// 構造体を使って初期化 (構文エラー部を修正)
-	ImGui_ImplDX12_InitInfo initInfo = {};
-	initInfo.Device = dxCommon->GetDevice();
-	initInfo.CommandQueue = dxCommon->GetCommandQueue(); // ★ 混入箇所を修正
-	initInfo.NumFramesInFlight = 2;
-	initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	initInfo.SrvDescriptorHeap = dxCommon->GetSrvDescriptorHeap();
-	initInfo.LegacySingleSrvCpuDescriptor = imguiSrvHandleCPU;
-	initInfo.LegacySingleSrvGpuDescriptor = imguiSrvHandleGPU;
-
-	ImGui_ImplDX12_Init(&initInfo);
-
-	ImGuiIO& io = ImGui::GetIO();
-	io.Fonts->Build();
-#endif
-
-	// 6. メインループ
+	// 7. メインループ
 	while (!winApp->ProcessMessage())
 	{
-		gameScene->Update();
+		// ImGui受付開始
+		imguiManager->Begin();
+
+		gameScene->Update(); // ImGuiの表示項目はここで追加される
+
+		// ImGui受付終了(全Updateの最後)
+		imguiManager->End();
 
 		// 描画前処理
 		dxCommon->PreDraw();
@@ -156,17 +142,16 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int)
 		// ゲームシーンの描画
 		gameScene->Draw(dxCommon->GetCommandList());
 
+		// ImGui描画(全Drawの最後、PostDrawの直前)
+		imguiManager->Draw();
+
 		// 描画後処理（60FPS固定）
 		dxCommon->PostDraw();
 	}
 
 	gameScene.reset();
 
-#ifdef USE_IMGUI
-	ImGui_ImplDX12_Shutdown();
-	ImGui_ImplWin32_Shutdown();
-	ImGui::DestroyContext();
-#endif
+	imguiManager->Finalize();
 
 	TextureManager::GetInstance()->Finalize();
 	winApp->Finalize();

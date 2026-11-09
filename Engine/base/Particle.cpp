@@ -1,4 +1,6 @@
 #include "Particle.h"
+#include "Engine/2d/ImGuiManager.h" // ImGuiを使うファイルは必ず読み込む
+#include "Engine/Base/SrvManager.h"
 
 static bool IsCollision(const AABB& aabb, const Vector3& point) {
 	return aabb.min.x <= point.x && point.x <= aabb.max.x &&
@@ -17,7 +19,7 @@ ParticleData Particle::MakeNewParticle(std::mt19937& randomEngine, const Vector3
 	particle.transform.scale = { 1.0f, 1.0f, 1.0f };
 	particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
 
-	particle.transform.translate = { 
+	particle.transform.translate = {
 		translate.x + distribution(randomEngine),
 		translate.y + distribution(randomEngine),
 		translate.z + distribution(randomEngine) };
@@ -38,9 +40,7 @@ std::list<ParticleData> Particle::Emit(const Emitter& emitter, std::mt19937& ran
 
 void Particle::Initialize(
 	ID3D12Device* device,
-	ID3D12DescriptorHeap* srvDescriptorHeap,
-	UINT descriptorSize,
-	uint32_t& srvIndexCounter,
+	SrvManager* srvManager,
 	IDxcUtils* dxcUtils,
 	IDxcCompiler3* dxcCompiler,
 	IDxcIncludeHandler* dxcIncludeHandler
@@ -81,21 +81,10 @@ void Particle::Initialize(
 	instancingResource_ = CreateBufferResource(device, sizeof(ParticleForGPU) * kNumMaxInstance);
 	instancingResource_->Map(0, nullptr, reinterpret_cast<void**>(&instancingData_));
 
-	// 5. Instancing用 SRV の作成
-	D3D12_SHADER_RESOURCE_VIEW_DESC instancingSrvDesc{};
-	instancingSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
-	instancingSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-	instancingSrvDesc.Buffer.FirstElement = 0;
-	instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-	instancingSrvDesc.Buffer.NumElements = kNumMaxInstance;
-	instancingSrvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
-
-	instancingSrvHandleCPU_ = GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSize, srvIndexCounter);
-	instancingSrvHandleGPU_ = GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSize, srvIndexCounter++);
-
-	device->CreateShaderResourceView(instancingResource_.Get(), &instancingSrvDesc, instancingSrvHandleCPU_);
-
+	// 5. Instancing用 SRV の作成(SrvManagerから確保)
+	uint32_t srvIndex = srvManager->Allocate();
+	srvManager->CreateSRVforStructuredBuffer(srvIndex, instancingResource_.Get(), kNumMaxInstance, sizeof(ParticleForGPU));
+	instancingSrvHandleGPU_ = srvManager->GetGPUDescriptorHandle(srvIndex);
 }
 
 void Particle::CreateRootSignatureAndPSO(

@@ -4,11 +4,11 @@
 
 #pragma comment(lib, "Dbghelp.lib")
 
-#ifdef _DEBUG
-#include "externals/imgui/imgui_impl_win32.h"
+#include "Engine/2d/ImGuiManager.h"
 
+#ifdef USE_IMGUI
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-#endif // Debug
+#endif // USE_IMGUI
 
 // クラッシュダンプの出力関数定義
 LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
@@ -41,7 +41,7 @@ LONG WINAPI ExportDump(EXCEPTION_POINTERS* exception)
 // 静的メンバ関数の実装
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
-#ifdef _DEBUG
+#ifdef USE_IMGUI
 	if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
 		return true;
 	}

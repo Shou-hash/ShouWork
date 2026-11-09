@@ -111,7 +111,6 @@ struct ModelData
 // =========================================================
 // 5. 上記の構造体を使用する Engine ライブラリ群のインクルード
 // =========================================================
-#include "Engine/2d/ImguiCode.h"
 #include "Engine/Base/WinApp.h"
 #include "Engine/Base/DirectXCommon.h"
 #include "Engine/Base/ResourceObject.h"
