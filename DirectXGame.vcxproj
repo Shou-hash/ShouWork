@@ -184,6 +184,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </ClCompile>
     <ClCompile Include="Engine\base\Particle.cpp" />
     <ClCompile Include="MyGame.cpp" />
+    <ClCompile Include="SceneFactory.cpp" />
     <ClCompile Include="TitleScene.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -193,6 +194,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\3d\ModelDraw.h" />
     <ClInclude Include="Engine\3d\ModelLoader.h" />
     <ClInclude Include="Engine\audio\Sound.h" />
+    <ClInclude Include="Engine\base\AbstractSceneFactory.h" />
     <ClInclude Include="Engine\base\BaseScene.h" />
     <ClInclude Include="Engine\base\BlendManager.h" />
     <ClInclude Include="Engine\base\Common.h" />
@@ -209,6 +211,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\input\Input.h" />
     <ClInclude Include="Engine\base\Particle.h" />
     <ClInclude Include="MyGame.h" />
+    <ClInclude Include="SceneFactory.h" />
     <ClInclude Include="TitleScene.h" />
   </ItemGroup>
   <ItemGroup>

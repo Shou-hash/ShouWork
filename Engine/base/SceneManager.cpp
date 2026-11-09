@@ -6,6 +6,16 @@ SceneManager* SceneManager::GetInstance()
 	return &instance;
 }
 
+void SceneManager::ChangeScene(const std::string& sceneName)
+{
+	assert(sceneFactory_);
+	assert(nextScene_ == nullptr);
+
+	// 次シーンを工場に生成させる
+	nextScene_ = sceneFactory_->CreateScene(sceneName);
+	assert(nextScene_); // 未登録のシーン名
+}
+
 void SceneManager::Update()
 {
 	// 次シーンの予約があるなら切り替える
@@ -43,4 +53,5 @@ void SceneManager::Finalize()
 		scene_.reset();
 	}
 	nextScene_.reset();
+	sceneFactory_ = nullptr;
 }

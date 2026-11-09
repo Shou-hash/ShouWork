@@ -1,5 +1,5 @@
 #include "MyGame.h"
-#include "TitleScene.h"
+#include "SceneFactory.h"
 #include "Engine/Base/SceneManager.h"
 
 void MyGame::Initialize()
@@ -7,8 +7,12 @@ void MyGame::Initialize()
 	// 基底クラスの初期化処理
 	Framework::Initialize();
 
-	// 最初のシーンをシーンマネージャにセット(初期化はマネージャ内で呼ばれる)
-	SceneManager::GetInstance()->SetNextScene(std::make_unique<TitleScene>(sceneContext_));
+	// シーン工場を生成し、マネージャにセット
+	sceneFactory_ = std::make_unique<SceneFactory>(sceneContext_);
+	SceneManager::GetInstance()->SetSceneFactory(sceneFactory_.get());
+
+	// 最初のシーンをシーン名で指定(初期化はマネージャ内で呼ばれる)
+	SceneManager::GetInstance()->ChangeScene("TITLE");
 }
 
 void MyGame::Draw()

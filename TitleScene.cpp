@@ -1,5 +1,4 @@
 #include "TitleScene.h"
-#include "GameScene.h"
 #include "Engine/Base/SceneManager.h"
 #include "Engine/2d/ImGuiManager.h"
 
@@ -60,7 +59,7 @@ void TitleScene::Update()
 
 	// SPACEでゲームシーンへ(予約するだけ。切り替えはシーンマネージャが次フレームで行う)
 	if (input_->TriggerKey(DIK_SPACE)) {
-		SceneManager::GetInstance()->SetNextScene(std::make_unique<GameScene>(ctx_));
+		SceneManager::GetInstance()->ChangeScene("GAMEPLAY");
 	}
 }
 

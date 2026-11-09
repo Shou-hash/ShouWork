@@ -2,6 +2,7 @@
 #include "Engine/Base/Common.h"
 #include "Engine/Base/SrvManager.h"
 #include "Engine/Base/BaseScene.h"
+#include "Engine/Base/AbstractSceneFactory.h"
 #include "Engine/2d/ImGuiManager.h"
 
 // ゲーム全体の骨組み(エンジン層)
@@ -42,6 +43,9 @@ protected:
 
 	// シーンへ渡すエンジン層の機能
 	SceneContext sceneContext_;
+
+	// シーン工場(具体的な工場はゲーム側が作り、解放はFrameworkが行う)
+	std::unique_ptr<AbstractSceneFactory> sceneFactory_;
 
 private:
 	void CreateRootSignature();

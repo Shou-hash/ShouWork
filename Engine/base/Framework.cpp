@@ -56,6 +56,7 @@ void Framework::Finalize()
 {
 	// 初期化と逆順
 	SceneManager::GetInstance()->Finalize();
+	sceneFactory_.reset(); // シーン工場の解放
 	imguiManager_->Finalize();
 	TextureManager::GetInstance()->Finalize();
 	winApp_->Finalize();

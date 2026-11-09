@@ -4,7 +4,6 @@
 #include "Engine/2d/TextureManager.h"
 #include "Engine/Base/SrvManager.h"
 #include "Engine/Base/SceneManager.h"
-#include "TitleScene.h"
 
 void GameScene::Finalize() {
 	if (soundManager) {
@@ -169,7 +168,7 @@ void GameScene::Update() {
 
 	// ESCでタイトルへ戻る
 	if (input_->TriggerKey(DIK_ESCAPE)) {
-		SceneManager::GetInstance()->SetNextScene(std::make_unique<TitleScene>(ctx_));
+		SceneManager::GetInstance()->ChangeScene("TITLE");
 	}
 
 	// デバッグカメラ切り替え判定
