@@ -7,6 +7,11 @@ Sound* Sound::GetInstance() {
 }
 
 void Sound::Initialize() {
+    // シーンの作り直しで何度も呼ばれるので、初期化済みなら何もしない
+    if (xAudio2_) {
+        return;
+    }
+
     HRESULT hr;
 
     // XAudio2エンジンのインスタンスを作成
@@ -106,9 +111,9 @@ void Sound::SoundPlayWave(const SoundData& soundData) {
 
     // 波形データのサブミット
     hr = pSourceVoice->SubmitSourceBuffer(&buffer);
-    
+
 
     // 再生開始
     hr = pSourceVoice->Start(0);
-    
+
 }

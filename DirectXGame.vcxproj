@@ -171,6 +171,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="Engine\base\DirectXCommon.cpp" />
     <ClCompile Include="Engine\base\Framework.cpp" />
     <ClCompile Include="Engine\base\ResourceObject.cpp" />
+    <ClCompile Include="Engine\base\SceneManager.cpp" />
     <ClCompile Include="Engine\base\SrvManager.cpp" />
     <ClCompile Include="Engine\base\WinApp.cpp" />
     <ClCompile Include="Engine\input\DirectInput.cpp" />
@@ -183,6 +184,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     </ClCompile>
     <ClCompile Include="Engine\base\Particle.cpp" />
     <ClCompile Include="MyGame.cpp" />
+    <ClCompile Include="TitleScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\2d\ImGuiManager.h" />
@@ -191,12 +193,14 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\3d\ModelDraw.h" />
     <ClInclude Include="Engine\3d\ModelLoader.h" />
     <ClInclude Include="Engine\audio\Sound.h" />
+    <ClInclude Include="Engine\base\BaseScene.h" />
     <ClInclude Include="Engine\base\BlendManager.h" />
     <ClInclude Include="Engine\base\Common.h" />
     <ClInclude Include="Engine\base\ConvertString.h" />
     <ClInclude Include="Engine\base\DirectXCommon.h" />
     <ClInclude Include="Engine\base\Framework.h" />
     <ClInclude Include="Engine\base\ResourceObject.h" />
+    <ClInclude Include="Engine\base\SceneManager.h" />
     <ClInclude Include="Engine\base\SrvManager.h" />
     <ClInclude Include="Engine\base\WinApp.h" />
     <ClInclude Include="Engine\input\DirectInput.h" />
@@ -205,6 +209,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\input\Input.h" />
     <ClInclude Include="Engine\base\Particle.h" />
     <ClInclude Include="MyGame.h" />
+    <ClInclude Include="TitleScene.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">

@@ -3,8 +3,10 @@
 #include "Engine/Base/WinApp.h"
 #include "Engine/2d/TextureManager.h"
 #include "Engine/Base/SrvManager.h"
+#include "Engine/Base/SceneManager.h"
+#include "TitleScene.h"
 
-GameScene::~GameScene() {
+void GameScene::Finalize() {
 	if (soundManager) {
 		soundManager->SoundUnload(&soundData);
 	}
@@ -12,16 +14,16 @@ GameScene::~GameScene() {
 	gamePad = nullptr;
 }
 
-void GameScene::Initialize(
-	ID3D12Device* device,
-	ID3D12GraphicsCommandList* commandList,
-	WinApp* winApp,
-	SrvManager* srvManager,
-	IDxcUtils* dxcUtils,
-	IDxcCompiler3* dxcCompiler,
-	IDxcIncludeHandler* dxcIncludeHandler,
-	ID3D12RootSignature* rootSignature
-) {
+void GameScene::Initialize() {
+	ID3D12Device* device = ctx_.dxCommon->GetDevice();
+	ID3D12GraphicsCommandList* commandList = ctx_.dxCommon->GetCommandList();
+	WinApp* winApp = ctx_.winApp;
+	SrvManager* srvManager = ctx_.srvManager;
+	IDxcUtils* dxcUtils = ctx_.dxcUtils;
+	IDxcCompiler3* dxcCompiler = ctx_.dxcCompiler;
+	IDxcIncludeHandler* dxcIncludeHandler = ctx_.dxcIncludeHandler;
+	ID3D12RootSignature* rootSignature = ctx_.rootSignature;
+
 	srvManager_ = srvManager;       // ★ 保持
 	rootSignature_ = rootSignature; // ★ 保持
 
@@ -164,6 +166,11 @@ void GameScene::InitializeSphere(ID3D12Device* device) {
 void GameScene::Update() {
 	// キーボード状態の更新
 	input_->Update();
+
+	// ESCでタイトルへ戻る
+	if (input_->TriggerKey(DIK_ESCAPE)) {
+		SceneManager::GetInstance()->SetNextScene(std::make_unique<TitleScene>(ctx_));
+	}
 
 	// デバッグカメラ切り替え判定
 	if (input_->TriggerKey(DIK_TAB)) {
@@ -481,7 +488,8 @@ void GameScene::DrawImGui() {
 #endif
 }
 
-void GameScene::Draw(ID3D12GraphicsCommandList* commandList) {
+void GameScene::Draw() {
+	ID3D12GraphicsCommandList* commandList = ctx_.dxCommon->GetCommandList();
 
 	// OBJモデル群の描画
 	for (auto& model : modelEntries) {

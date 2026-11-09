@@ -1,6 +1,7 @@
 #pragma once
 #include "Engine/Base/Common.h"
 #include "Engine/Base/SrvManager.h"
+#include "Engine/Base/BaseScene.h"
 #include "Engine/2d/ImGuiManager.h"
 
 // ゲーム全体の骨組み(エンジン層)
@@ -38,6 +39,9 @@ protected:
 	Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
 	Microsoft::WRL::ComPtr<IDxcIncludeHandler> dxcIncludeHandler_;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
+
+	// シーンへ渡すエンジン層の機能
+	SceneContext sceneContext_;
 
 private:
 	void CreateRootSignature();

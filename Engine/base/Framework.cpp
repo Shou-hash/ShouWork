@@ -1,4 +1,5 @@
 #include "Engine/Base/Framework.h"
+#include "Engine/Base/SceneManager.h"
 
 void Framework::Initialize()
 {
@@ -46,11 +47,15 @@ void Framework::Initialize()
 		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 		DXGI_FORMAT_D24_UNORM_S8_UINT
 	);
+
+	// シーンへ渡すエンジン層の機能
+	sceneContext_ = { winApp_.get(), dxCommon_.get(), srvManager_.get(), dxcUtils_.Get(), dxcCompiler_.Get(), dxcIncludeHandler_.Get(), rootSignature_.Get() };
 }
 
 void Framework::Finalize()
 {
 	// 初期化と逆順
+	SceneManager::GetInstance()->Finalize();
 	imguiManager_->Finalize();
 	TextureManager::GetInstance()->Finalize();
 	winApp_->Finalize();
@@ -63,6 +68,11 @@ void Framework::Update()
 	if (winApp_->ProcessMessage()) {
 		endRequest_ = true;
 	}
+
+	// ImGui受付 → シーンマネージャの更新(切り替え + 実行中シーン) → 受付終了
+	imguiManager_->Begin();
+	SceneManager::GetInstance()->Update();
+	imguiManager_->End();
 }
 
 void Framework::Run()

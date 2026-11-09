@@ -1,42 +1,14 @@
 #include "MyGame.h"
+#include "TitleScene.h"
+#include "Engine/Base/SceneManager.h"
 
 void MyGame::Initialize()
 {
 	// 基底クラスの初期化処理
 	Framework::Initialize();
 
-	// ゲーム固有の初期化
-	gameScene_ = std::make_unique<GameScene>();
-	gameScene_->Initialize(
-		dxCommon_->GetDevice(),
-		dxCommon_->GetCommandList(),
-		winApp_.get(),
-		srvManager_.get(),
-		dxcUtils_.Get(),
-		dxcCompiler_.Get(),
-		dxcIncludeHandler_.Get(),
-		rootSignature_.Get()
-	);
-}
-
-void MyGame::Finalize()
-{
-	// ゲーム固有の終了処理
-	gameScene_.reset();
-
-	// 基底クラスの終了処理
-	Framework::Finalize();
-}
-
-void MyGame::Update()
-{
-	// 基底クラスの更新処理
-	Framework::Update();
-
-	// ゲーム固有の更新処理(ImGuiの表示項目はBegin〜Endの間で追加される)
-	imguiManager_->Begin();
-	gameScene_->Update();
-	imguiManager_->End();
+	// 最初のシーンをシーンマネージャにセット(初期化はマネージャ内で呼ばれる)
+	SceneManager::GetInstance()->SetNextScene(std::make_unique<TitleScene>(sceneContext_));
 }
 
 void MyGame::Draw()
@@ -46,8 +18,8 @@ void MyGame::Draw()
 	srvManager_->PreDraw();
 	dxCommon_->GetCommandList()->SetGraphicsRootSignature(rootSignature_.Get());
 
-	// ゲームシーンの描画
-	gameScene_->Draw(dxCommon_->GetCommandList());
+	// シーンの描画
+	SceneManager::GetInstance()->Draw();
 
 	// ImGui描画(全Drawの最後、PostDrawの直前)
 	imguiManager_->Draw();

@@ -1,30 +1,19 @@
 #pragma once
-#include "Engine/Base/Common.h"
+#include "Engine/Base/BaseScene.h"
 #include "Engine/2d/TextureManager.h"
-#include "Engine/base/SrvManager.h"
+#include "SrvManager.h"
 
 class WinApp;
 
-class GameScene {
+class GameScene : public BaseScene {
 public:
-	GameScene() = default;
-	~GameScene();
+	using BaseScene::BaseScene; // コンストラクタを継承
 
-	// 初期化・更新・描画
-	void Initialize(
-		ID3D12Device* device,
-		ID3D12GraphicsCommandList* commandList,
-		WinApp* winApp,
-		SrvManager* srvManager,
-		IDxcUtils* dxcUtils,
-		IDxcCompiler3* dxcCompiler,
-		IDxcIncludeHandler* dxcIncludeHandler,
-		ID3D12RootSignature* rootSignature
-	);
-
-	void Update();
-
-	void Draw(ID3D12GraphicsCommandList* commandList);
+	// 初期化・終了・更新・描画
+	void Initialize() override;
+	void Finalize() override;
+	void Update() override;
+	void Draw() override;
 
 public:
 	// 内部初期化処理
