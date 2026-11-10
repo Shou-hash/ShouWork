@@ -1,77 +1,71 @@
 #pragma once
 #include "Common.h"
-#include <random>
-#include <list>
 
 class SrvManager;
 
-// ★ GPUに転送するデータ構造体
+// GPU側と完全にフォーマットを合わせた構造体
 struct ParticleForGPU {
 	Matrix4x4 WVP;
 	Matrix4x4 World;
 	Vector4 color;
+	Vector3 position;
+	float currentTime;
+	Vector3 velocity;
+	float lifeTime;
+	Vector3 scale;
+	float padding;
 };
 
-// ★ Particle構造体（CPU側で動かす挙動に関するデータ）
-struct ParticleData {
-	struct Transform transform;
-	Vector3 velocity;
-	Vector4 color;
-	float lifeTime;
-	float currentTime;
+// Compute Shader用定数バッファ
+struct ParticleCSConstant {
+	Matrix4x4 viewProjection;
+	Matrix4x4 billboard;
+	Vector3 emitterPos;
+	float deltaTime;
+	Vector3 acceleration;
+	uint32_t maxParticles;
+	Vector3 fieldMin;
+	float pad0;
+	Vector3 fieldMax;
+	float pad1;
 };
 
 struct Emitter {
 	struct Transform transform { { 1, 1, 1 }, { 0,0,0 }, { 0,0,0 } };
-	uint32_t count = 3;        // 1回の発生数
-	float frequency = 0.5f;    // 発生頻度(秒)
+	uint32_t count = 3;
+	float frequency = 0.5f;
 	float frequencyTime = 0.0f;
 };
 
 struct AABB { Vector3 min; Vector3 max; };
 
 struct AccelerationField {
-	Vector3 acceleration;  // 加速度
-	AABB area;             // 範囲
+	Vector3 acceleration;
+	AABB area;
 };
 
-// =========================================================
-// Particle クラス（Instancing描画管理）
-// =========================================================
 class Particle
 {
 public:
-	// ★ 最大インスタンス数（資料に従い kNumMaxInstance に変更）
-	static const uint32_t kNumMaxInstance = 100;
+	// GPUパーティクル化により数万個まで拡張可能
+	static const uint32_t kNumMaxInstance = 10240;
 
 	Particle() = default;
 	~Particle() = default;
 
-	// 初期化
 	void Initialize(
 		ID3D12Device* device,
-		SrvManager* srvManager, // TextureManager/ImGuiと同じSrvManagerのヒープにSRVを確保する
+		SrvManager* srvManager,
 		IDxcUtils* dxcUtils,
 		IDxcCompiler3* dxcCompiler,
 		IDxcIncludeHandler* dxcIncludeHandler
 	);
 
-	// 更新
-	void Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix); // 変更
-
-	// 描画
+	void Update(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
 	void Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU);
-
-	// ImGui描画
 	void DrawImGui();
 
-	// 新しい Particle を生成する関数
-	ParticleData MakeNewParticle(std::mt19937& randomEngine, const Vector3& translate); // 引数追加
-
-	std::list<ParticleData> Emit(const Emitter& emitter, std::mt19937& randomEngine);   // 追加
-
 private:
-	// Particle専用の RootSignature と PipelineState の作成
 	void CreateRootSignatureAndPSO(
 		ID3D12Device* device,
 		IDxcUtils* dxcUtils,
@@ -79,39 +73,44 @@ private:
 		IDxcIncludeHandler* dxcIncludeHandler
 	);
 
+	void CreateComputePipeline(
+		ID3D12Device* device,
+		IDxcUtils* dxcUtils,
+		IDxcCompiler3* dxcCompiler,
+		IDxcIncludeHandler* dxcIncludeHandler
+	);
+
 private:
-	// 頂点バッファ
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
 
-	// マテリアルバッファ
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
 	Material* materialData_ = nullptr;
 
-	// インスタンシングバッファ (StructuredBuffer)
-	Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_;
-	ParticleForGPU* instancingData_ = nullptr;
+	// GPUパーティクルバッファ (UAV / SRV 兼用)
+	Microsoft::WRL::ComPtr<ID3D12Resource> particleBufferResource_;
+	uint32_t uavIndex_ = 0;
+	uint32_t srvIndex_ = 0;
+	D3D12_GPU_DESCRIPTOR_HANDLE uavHandleGPU_{};
+	D3D12_GPU_DESCRIPTOR_HANDLE srvHandleGPU_{};
 
-	// SRV用ハンドル(GPU側だけ保持)
-	D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_{};
+	// Compute Shader用定数バッファ
+	Microsoft::WRL::ComPtr<ID3D12Resource> csConstantResource_;
+	ParticleCSConstant* csConstantData_ = nullptr;
 
-	// インスタンスごとの Particle 情報
-	std::list<ParticleData> particles_;
 	Emitter emitter_;
+	AccelerationField accelerationField_{ { 15.0f, 0.0f, 0.0f }, { { -1.0f, -1.0f, -1.0f }, { 1.0f, 1.0f, 1.0f } } };
+	bool useBillboard_ = true;
+	bool useField_ = true;
 
-	// ★ 実際に描画すべきインスタンス数
-	uint32_t numInstance_ = 0;
+	// Compute パイプライン
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature_;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;
 
-	// 乱数生成器
-	std::random_device seedGenerator_;
-	std::mt19937 randomEngine_;
-
-	// Particle用パイプライン設定
+	// Graphics パイプライン
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 
-	bool useBillboard_ = true;
-
-	AccelerationField accelerationField_{ { 15.0f, 0.0f, 0.0f }, { { -1.0f, -1.0f, -1.0f }, { 1.0f, 1.0f, 1.0f } } };
-	bool useField_ = true;
+	SrvManager* srvManager_ = nullptr; // SrvManagerの保持用
+	bool isFirstUpdate_ = true;        // 初回バリア判定用
 };

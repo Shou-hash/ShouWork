@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <mfapi.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
 
 class Sound
 {
@@ -49,8 +52,12 @@ public:
 
     // 音声再生
     void SoundPlayWave(const SoundData& soundData);
+    
+    // public に追加(拡張子で自動分岐。wavは既存処理、それ以外はMedia Foundation)
+    SoundData SoundLoad(const std::string& filename);
 
 private:
+
     Sound() = default;
     ~Sound() = default;
     Sound(const Sound&) = delete;
@@ -59,4 +66,7 @@ private:
 private:
     Microsoft::WRL::ComPtr<IXAudio2> xAudio2_;
     IXAudio2MasteringVoice* masteringVoice_ = nullptr;
+
+    SoundData SoundLoadMF(const std::string& filename);
+    std::vector<IXAudio2SourceVoice*> voices_; // 再生中ボイスの管理用
 };

@@ -33,6 +33,8 @@ public:
 
 	ID3D12DescriptorHeap* GetDescriptorHeap() const { return descriptorHeap.Get(); }
 
+	void CreateUAVforStructuredBuffer(uint32_t srvIndex, ID3D12Resource* pResource, UINT numElements, UINT structureByteStride);
+
 private:
 	DirectXCommon* directXCommon = nullptr;
 	uint32_t descriptorSize = 0;

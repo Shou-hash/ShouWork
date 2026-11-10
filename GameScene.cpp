@@ -202,9 +202,9 @@ void GameScene::Update() {
 
 	spriteMaterialData->uvTransform = MakeUVTransformMatrix(spriteUVScale, spriteUVRotate, spriteUVTranslate);
 
-	// Particleの更新
+	// Particleの更新 (CommandListを引数に追加)
 	if (particle_ && showParticles) {
-		particle_->Update(viewMatrix, projectionMatrix);
+		particle_->Update(ctx_.dxCommon->GetCommandList(), viewMatrix, projectionMatrix);
 	}
 
 	// Transform & 行列計算の更新

@@ -1,41 +1,33 @@
 #include "Particle.h"
-#include "Engine/2d/ImGuiManager.h" // ImGuiを使うファイルは必ず読み込む
+#include "Engine/2d/ImGuiManager.h"
 #include "Engine/Base/SrvManager.h"
 
-static bool IsCollision(const AABB& aabb, const Vector3& point) {
-	return aabb.min.x <= point.x && point.x <= aabb.max.x &&
-		aabb.min.y <= point.y && point.y <= aabb.max.y &&
-		aabb.min.z <= point.z && point.z <= aabb.max.z;
-}
+// GPU専用の DEFAULT ヒープバッファ作成関数
+static ID3D12Resource* CreateGPUBufferResource(ID3D12Device* device, size_t sizeInBytes) {
+	D3D12_HEAP_PROPERTIES heapProps{};
+	heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-// 新しい Particle を生成する関数
-ParticleData Particle::MakeNewParticle(std::mt19937& randomEngine, const Vector3& translate) {
+	D3D12_RESOURCE_DESC resDesc{};
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resDesc.Width = sizeInBytes;
+	resDesc.Height = 1;
+	resDesc.DepthOrArraySize = 1;
+	resDesc.MipLevels = 1;
+	resDesc.SampleDesc.Count = 1;
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-	std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
-	std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
-	std::uniform_real_distribution<float> distTime(1.0f, 3.0f);
-
-	ParticleData particle;
-	particle.transform.scale = { 1.0f, 1.0f, 1.0f };
-	particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
-
-	particle.transform.translate = {
-		translate.x + distribution(randomEngine),
-		translate.y + distribution(randomEngine),
-		translate.z + distribution(randomEngine) };
-
-	particle.velocity = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
-	particle.color = { distColor(randomEngine), distColor(randomEngine), distColor(randomEngine), 1.0f };
-	particle.lifeTime = distTime(randomEngine);
-	particle.currentTime = 0.0f;
-	return particle;
-}
-
-std::list<ParticleData> Particle::Emit(const Emitter& emitter, std::mt19937& randomEngine) {
-	std::list<ParticleData> particles;
-	for (uint32_t i = 0; i < emitter.count; ++i)
-		particles.push_back(MakeNewParticle(randomEngine, emitter.transform.translate));
-	return particles;
+	ID3D12Resource* resource = nullptr;
+	HRESULT hr = device->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&resDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		nullptr,
+		IID_PPV_ARGS(&resource)
+	);
+	assert(SUCCEEDED(hr));
+	return resource;
 }
 
 void Particle::Initialize(
@@ -45,20 +37,20 @@ void Particle::Initialize(
 	IDxcCompiler3* dxcCompiler,
 	IDxcIncludeHandler* dxcIncludeHandler
 ) {
-	// 乱数生成器の初期化
-	randomEngine_ = std::mt19937(seedGenerator_());
+	srvManager_ = srvManager; // ★ SrvManagerのポインタを保持
 
-	// 1. Particle用 RootSignature & PSO の構築
+	// 1. Graphics PSO & Compute PSO の構築
 	CreateRootSignatureAndPSO(device, dxcUtils, dxcCompiler, dxcIncludeHandler);
+	CreateComputePipeline(device, dxcUtils, dxcCompiler, dxcIncludeHandler);
 
-	// 2. 頂点データ (四角形プリミティブ: 6頂点) の作成
+	// 2. 板ポリゴン頂点データの作成
 	std::vector<VertexData> vertices = {
-		{ {  0.5f,  0.5f, 0.0f, 1.0f }, 0.0f, 0.0f, { 0.0f, 0.0f, 1.0f } }, // 左上
-		{ { -0.5f,  0.5f, 0.0f, 1.0f }, 1.0f, 0.0f, { 0.0f, 0.0f, 1.0f } }, // 右上
-		{ {  0.5f, -0.5f, 0.0f, 1.0f }, 0.0f, 1.0f, { 0.0f, 0.0f, 1.0f } }, // 左下
-		{ {  0.5f, -0.5f, 0.0f, 1.0f }, 0.0f, 1.0f, { 0.0f, 0.0f, 1.0f } }, // 左下
-		{ { -0.5f,  0.5f, 0.0f, 1.0f }, 1.0f, 0.0f, { 0.0f, 0.0f, 1.0f } }, // 右上
-		{ { -0.5f, -0.5f, 0.0f, 1.0f }, 1.0f, 1.0f, { 0.0f, 0.0f, 1.0f } }, // 右下
+		{ {  0.5f,  0.5f, 0.0f, 1.0f }, 0.0f, 0.0f, { 0.0f, 0.0f, 1.0f } },
+		{ { -0.5f,  0.5f, 0.0f, 1.0f }, 1.0f, 0.0f, { 0.0f, 0.0f, 1.0f } },
+		{ {  0.5f, -0.5f, 0.0f, 1.0f }, 0.0f, 1.0f, { 0.0f, 0.0f, 1.0f } },
+		{ {  0.5f, -0.5f, 0.0f, 1.0f }, 0.0f, 1.0f, { 0.0f, 0.0f, 1.0f } },
+		{ { -0.5f,  0.5f, 0.0f, 1.0f }, 1.0f, 0.0f, { 0.0f, 0.0f, 1.0f } },
+		{ { -0.5f, -0.5f, 0.0f, 1.0f }, 1.0f, 1.0f, { 0.0f, 0.0f, 1.0f } },
 	};
 
 	vertexBuffer_ = CreateBufferResource(device, sizeof(VertexData) * vertices.size());
@@ -70,21 +62,72 @@ void Particle::Initialize(
 	vertexBuffer_->Map(0, nullptr, reinterpret_cast<void**>(&vertData));
 	std::memcpy(vertData, vertices.data(), sizeof(VertexData) * vertices.size());
 
-	// 3. マテリアルバッファの作成
+	// 3. マテリアルバッファ作成
 	materialResource_ = CreateBufferResource(device, sizeof(Material));
 	materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&materialData_));
 	materialData_->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 	materialData_->enableLighting = 0;
 	materialData_->uvTransform = MakeIdentity4x4();
 
-	// 4. Instancing用 ParticleForGPU (StructuredBuffer) リソースの作成
-	instancingResource_ = CreateBufferResource(device, sizeof(ParticleForGPU) * kNumMaxInstance);
-	instancingResource_->Map(0, nullptr, reinterpret_cast<void**>(&instancingData_));
+	// 4. CS定数バッファ作成
+	csConstantResource_ = CreateBufferResource(device, sizeof(ParticleCSConstant));
+	csConstantResource_->Map(0, nullptr, reinterpret_cast<void**>(&csConstantData_));
 
-	// 5. Instancing用 SRV の作成(SrvManagerから確保)
-	uint32_t srvIndex = srvManager->Allocate();
-	srvManager->CreateSRVforStructuredBuffer(srvIndex, instancingResource_.Get(), kNumMaxInstance, sizeof(ParticleForGPU));
-	instancingSrvHandleGPU_ = srvManager->GetGPUDescriptorHandle(srvIndex);
+	// 5. GPUパーティクルバッファ (UAV / SRV) の確保
+	particleBufferResource_ = CreateGPUBufferResource(device, sizeof(ParticleForGPU) * kNumMaxInstance);
+
+	uavIndex_ = srvManager->Allocate();
+	srvManager->CreateUAVforStructuredBuffer(uavIndex_, particleBufferResource_.Get(), kNumMaxInstance, sizeof(ParticleForGPU));
+	uavHandleGPU_ = srvManager->GetGPUDescriptorHandle(uavIndex_);
+
+	srvIndex_ = srvManager->Allocate();
+	srvManager->CreateSRVforStructuredBuffer(srvIndex_, particleBufferResource_.Get(), kNumMaxInstance, sizeof(ParticleForGPU));
+	srvHandleGPU_ = srvManager->GetGPUDescriptorHandle(srvIndex_);
+}
+
+void Particle::CreateComputePipeline(
+	ID3D12Device* device,
+	IDxcUtils* dxcUtils,
+	IDxcCompiler3* dxcCompiler,
+	IDxcIncludeHandler* dxcIncludeHandler
+) {
+	D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
+	descriptorRange[0].BaseShaderRegister = 0; // u0
+	descriptorRange[0].NumDescriptors = 1;
+	descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	D3D12_ROOT_PARAMETER rootParameters[2] = {};
+	// Root[0]: CS ConstantBuffer (b0)
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+	rootParameters[0].Descriptor.ShaderRegister = 0;
+
+	// Root[1]: UAV Descriptor Table (u0)
+	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+	rootParameters[1].DescriptorTable.pDescriptorRanges = descriptorRange;
+	rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
+
+	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+	rootSignatureDesc.pParameters = rootParameters;
+	rootSignatureDesc.NumParameters = _countof(rootParameters);
+
+	Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
+	Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+	HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+	assert(SUCCEEDED(hr));
+	hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&computeRootSignature_));
+	assert(SUCCEEDED(hr));
+
+	IDxcBlob* csBlob = CompileShader(L"Engine/Shaders/Particle.CS.hlsl", L"cs_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
+
+	D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc{};
+	computePsoDesc.pRootSignature = computeRootSignature_.Get();
+	computePsoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
+
+	hr = device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&computePipelineState_));
+	assert(SUCCEEDED(hr));
 }
 
 void Particle::CreateRootSignatureAndPSO(
@@ -93,7 +136,7 @@ void Particle::CreateRootSignatureAndPSO(
 	IDxcCompiler3* dxcCompiler,
 	IDxcIncludeHandler* dxcIncludeHandler
 ) {
-	// Particle専用 RootSignatureの作成
+	// (既存の Graphic PSO 作成処理を踏襲)
 	D3D12_DESCRIPTOR_RANGE descriptorRangeForInstancing[1] = {};
 	descriptorRangeForInstancing[0].BaseShaderRegister = 0; // t0
 	descriptorRangeForInstancing[0].NumDescriptors = 1;
@@ -107,22 +150,19 @@ void Particle::CreateRootSignatureAndPSO(
 	descriptorRangeForTexture[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	D3D12_ROOT_PARAMETER rootParameters[3] = {};
-	// rootParameters[0]: Material (Pixel CBV b0)
 	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 	rootParameters[0].Descriptor.ShaderRegister = 0;
 
-	// rootParameters[1]: StructuredBuffer (Vertex SRV t0)
 	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 	rootParameters[1].DescriptorTable.pDescriptorRanges = descriptorRangeForInstancing;
-	rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForInstancing);
+	rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
 
-	// rootParameters[2]: Texture (Pixel SRV t0)
 	rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 	rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRangeForTexture;
-	rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeForTexture);
+	rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
 
 	D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
 	staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -145,15 +185,12 @@ void Particle::CreateRootSignatureAndPSO(
 	Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
 	HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
 	assert(SUCCEEDED(hr));
-
 	hr = device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
 	assert(SUCCEEDED(hr));
 
-	// シェーダーコンパイル
 	IDxcBlob* vertexShaderBlob = CompileShader(L"Engine/Shaders/Particle.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
 	IDxcBlob* pixelShaderBlob = CompileShader(L"Engine/Shaders/Particle.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
 
-	// インプットレイアウト
 	D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
 	inputElementDescs[0].SemanticName = "POSITION";
 	inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -171,7 +208,6 @@ void Particle::CreateRootSignatureAndPSO(
 	psoDesc.VS = { vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize() };
 	psoDesc.PS = { pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize() };
 
-	// ★ 加算ブレンド (AddBlend) の設定
 	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = TRUE;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -183,11 +219,10 @@ void Particle::CreateRootSignatureAndPSO(
 	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
 	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // 両面表示
+	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
-	// ★ Depthの書き込みを行わない
 	psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Depthの書き込みを行わない
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 
 	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -200,129 +235,76 @@ void Particle::CreateRootSignatureAndPSO(
 	assert(SUCCEEDED(hr));
 }
 
-void Particle::Update(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
-	const float kDeltaTime = 1.0f / 60.0f;
+void Particle::Update(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+	// ★ Compute ShaderでDescriptorTableを使う前に、DescriptorHeapをコマンドリストにセットする
+	ID3D12DescriptorHeap* descriptorHeaps[] = { srvManager_->GetDescriptorHeap() };
+	commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
-	// 頻度による発生
-	emitter_.frequencyTime += kDeltaTime;
-	if (emitter_.frequency <= emitter_.frequencyTime) {
-		particles_.splice(particles_.end(), Emit(emitter_, randomEngine_));
-		emitter_.frequencyTime -= emitter_.frequency;
-	}
+	// 定数バッファの更新
+	csConstantData_->viewProjection = Multiply(viewMatrix, projectionMatrix);
 
-	Matrix4x4 billboardMatrix = MakeIdentity4x4();
+	Matrix4x4 billboard = MakeIdentity4x4();
 	for (int i = 0; i < 3; ++i)
 		for (int j = 0; j < 3; ++j)
-			billboardMatrix.m[i][j] = viewMatrix.m[j][i];
-	Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
+			billboard.m[i][j] = viewMatrix.m[j][i];
+	csConstantData_->billboard = useBillboard_ ? billboard : MakeIdentity4x4();
 
-	uint32_t numInstance = 0;
-	for (auto it = particles_.begin(); it != particles_.end();) {
-		if (it->lifeTime <= it->currentTime) {
-			it = particles_.erase(it); // 寿命切れは消す(戻り値が次の要素)
-			continue;
-		}
+	csConstantData_->emitterPos = emitter_.transform.translate;
+	csConstantData_->deltaTime = 1.0f / 60.0f;
+	csConstantData_->acceleration = accelerationField_.acceleration;
+	csConstantData_->maxParticles = kNumMaxInstance;
+	csConstantData_->fieldMin = useField_ ? accelerationField_.area.min : Vector3{ 1e10f, 1e10f, 1e10f };
+	csConstantData_->fieldMax = useField_ ? accelerationField_.area.max : Vector3{ -1e10f, -1e10f, -1e10f };
 
-		// Fieldの範囲内のParticleには加速度を適用する
-		if (useField_ && IsCollision(accelerationField_.area, it->transform.translate)) {
-			it->velocity.x += accelerationField_.acceleration.x * kDeltaTime;
-			it->velocity.y += accelerationField_.acceleration.y * kDeltaTime;
-			it->velocity.z += accelerationField_.acceleration.z * kDeltaTime;
-		}
+	// 1. リソースバリア: 初回は COMMON から UNORDERED_ACCESS へ遷移させる
+	D3D12_RESOURCE_BARRIER barrier{};
+	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barrier.Transition.pResource = particleBufferResource_.Get();
+	barrier.Transition.StateBefore = isFirstUpdate_ ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	commandList->ResourceBarrier(1, &barrier);
 
-		it->transform.translate.x += it->velocity.x * kDeltaTime;
-		it->transform.translate.y += it->velocity.y * kDeltaTime;
-		it->transform.translate.z += it->velocity.z * kDeltaTime;
-		it->currentTime += kDeltaTime;
+	isFirstUpdate_ = false; // 初回フラグを解除
 
-		// GPUバッファの最大数を超えたら書き込まない(バッファオーバーラン対策)
-		if (numInstance < kNumMaxInstance) {
-			const auto& t = it->transform;
-			Matrix4x4 worldMatrix = useBillboard_
-				? Multiply(Multiply(MakeScaleMatrix(t.scale), billboardMatrix), MakeTranslateMatrix(t.translate))
-				: MakeAffineMatrix(t.scale, t.rotate, t.translate);
-			instancingData_[numInstance].WVP = Multiply(worldMatrix, viewProjectionMatrix);
-			instancingData_[numInstance].World = worldMatrix;
-			instancingData_[numInstance].color = it->color;
-			instancingData_[numInstance].color.w = 1.0f - (it->currentTime / it->lifeTime);
-			++numInstance;
-		}
-		++it; // erase しなかったときだけ進める
-	}
-	numInstance_ = numInstance;
+	// 2. Compute Shader の実行 (Dispatch)
+	commandList->SetComputeRootSignature(computeRootSignature_.Get());
+	commandList->SetPipelineState(computePipelineState_.Get());
+	commandList->SetComputeRootConstantBufferView(0, csConstantResource_->GetGPUVirtualAddress());
+	commandList->SetComputeRootDescriptorTable(1, uavHandleGPU_);
+
+	uint32_t numThreadGroups = (kNumMaxInstance + 1023) / 1024;
+	commandList->Dispatch(numThreadGroups, 1, 1);
+
+	// 3. リソースバリア: UNORDERED_ACCESS -> NON_PIXEL_SHADER_RESOURCE (Vertex Shader読み取り用)
+	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	commandList->ResourceBarrier(1, &barrier);
 }
 
 void Particle::Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU) {
-	// PSO & RootSignatureのセット
 	commandList->SetPipelineState(pipelineState_.Get());
 	commandList->SetGraphicsRootSignature(rootSignature_.Get());
 
-	// ルートパラメータのバインド
 	commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
-	commandList->SetGraphicsRootDescriptorTable(1, instancingSrvHandleGPU_); // Instancing用 StructuredBuffer SRV
-	commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);   // テクスチャ SRV
+	commandList->SetGraphicsRootDescriptorTable(1, srvHandleGPU_);
+	commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
 
 	commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
-
-	// 描画 (生きている numInstance_ だけ描画)
-	commandList->DrawInstanced(6, numInstance_, 0, 0);
+	commandList->DrawInstanced(6, kNumMaxInstance, 0, 0);
 }
 
 void Particle::DrawImGui() {
 #ifdef USE_IMGUI
 	ImGui::Checkbox("useBillboard", &useBillboard_);
-
 	if (ImGui::CollapsingHeader("Emitter", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::DragFloat3("EmitterTranslate", &emitter_.transform.translate.x, 0.01f, -100.0f, 100.0f);
-		int count = static_cast<int>(emitter_.count);
-		if (ImGui::DragInt("Count", &count, 1, 1, static_cast<int>(kNumMaxInstance))) {
-			emitter_.count = static_cast<uint32_t>(count);
-		}
-		ImGui::DragFloat("Frequency", &emitter_.frequency, 0.01f, 0.01f, 10.0f);
-		if (ImGui::Button("Add Particle")) {
-			particles_.splice(particles_.end(), Emit(emitter_, randomEngine_));
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Clear")) {
-			particles_.clear();
-		}
 	}
-
 	if (ImGui::CollapsingHeader("Acceleration Field", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Checkbox("useField", &useField_);
 		ImGui::DragFloat3("Acceleration", &accelerationField_.acceleration.x, 0.1f);
 		ImGui::DragFloat3("Area Min", &accelerationField_.area.min.x, 0.01f);
 		ImGui::DragFloat3("Area Max", &accelerationField_.area.max.x, 0.01f);
-	}
-
-	if (ImGui::CollapsingHeader("Material & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
-		if (materialData_) {
-			ImGui::ColorEdit4("Material Color", &materialData_->color.x);
-			const char* lightingTypes[] = { "None (0)", "Lambert (1)", "Half Lambert (2)" };
-			int lightingType = materialData_->enableLighting;
-			if (ImGui::Combo("Lighting Mode", &lightingType, lightingTypes, static_cast<int>(std::size(lightingTypes)))) {
-				materialData_->enableLighting = lightingType;
-			}
-		}
-	}
-
-	if (ImGui::CollapsingHeader("Instances Parameter", ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::Text("Drawn: %u / %u (list size: %zu)", numInstance_, kNumMaxInstance, particles_.size());
-		int id = 0;
-		for (auto& p : particles_) {
-			ImGui::PushID(id);
-			if (ImGui::TreeNode(std::format("Particle Instance {}", id).c_str())) {
-				ImGui::ColorEdit4("Color", &p.color.x);
-				ImGui::SliderFloat3("Position", &p.transform.translate.x, -10.0f, 10.0f);
-				ImGui::SliderFloat3("Velocity", &p.velocity.x, -5.0f, 5.0f);
-				ImGui::SliderFloat3("Rotate", &p.transform.rotate.x, -3.14f, 3.14f);
-				ImGui::SliderFloat3("Scale", &p.transform.scale.x, 0.01f, 5.0f);
-				ImGui::Text("LifeTime: %.2f / %.2f s", p.currentTime, p.lifeTime);
-				ImGui::TreePop();
-			}
-			ImGui::PopID();
-			++id;
-		}
 	}
 #endif
 }
