@@ -18,6 +18,10 @@
 #include <strsafe.h>
 #include <wrl.h>
 
+// ★ nlohmann/json の追加
+#include "nlohmann/json.hpp"
+using json = nlohmann::json; // (オプション: 毎回 nlohmann:: と書かずに json 型を使えるようにする)
+
 // =========================================================
 // 2. DirectX / Audio / DirectInput Libraries
 // =========================================================
@@ -107,6 +111,10 @@ struct ModelData
 	MaterialData material;
 	std::vector<MeshData> meshes;
 };
+
+// Vector3 や Transform の相互変換（マクロで定義）
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Vector3, x, y, z)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(struct Transform, scale, rotate, translate)
 
 // =========================================================
 // 5. 上記の構造体を使用する Engine ライブラリ群のインクルード

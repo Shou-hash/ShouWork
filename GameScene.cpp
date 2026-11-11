@@ -166,6 +166,14 @@ void GameScene::Update() {
 	// キーボード状態の更新
 	input_->Update();
 
+	// --- キー操作によるセーブ＆ロード処理 ---
+	if (input_->TriggerKey(DIK_S)) {
+		SaveGameData();
+	}
+	if (input_->TriggerKey(DIK_L)) {
+		LoadGameData();
+	}
+
 	// ESCでタイトルへ戻る
 	if (input_->TriggerKey(DIK_ESCAPE)) {
 		SceneManager::GetInstance()->ChangeScene("TITLE");
@@ -291,6 +299,18 @@ void GameScene::Update() {
 
 void GameScene::DrawImGui() {
 #ifdef USE_IMGUI
+	ImGui::Begin("Scene Control Panel");
+
+	// --- セーブ/ロードボタンの設置 ---
+	if (ImGui::Button("Save Data", ImVec2(100, 30))) {
+		SaveGameData();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Load Data", ImVec2(100, 30))) {
+		LoadGameData();
+	}
+	ImGui::Separator();
+
 	static const char* blendModeNames[] = {
 		"None (なし)",
 		"Normal (通常α)",
@@ -560,4 +580,63 @@ void GameScene::Draw() {
 		commandList->DrawInstanced(inst.vertexCount, 1, 0, 0);
 	}
 
+}
+
+void GameScene::SaveGameData(const std::string& filePath) {
+	json j;
+
+	// 1. 中央モデル (Plane) のパラメータ保存
+	j["transform"] = transform;
+	j["showModel"] = showModel;
+	j["useMonsterBall"] = useMonsterBall;
+
+	// 2. 球体 (Sphere) のパラメータ保存
+	j["sphereTransform"] = sphereTransform;
+	j["showSphere"] = showSphere;
+	j["sphereRotate"] = { sphereRotate[0], sphereRotate[1], sphereRotate[2] };
+	j["sphereTextureIndex"] = sphereTextureIndex;
+
+	// 3. スプライト (Sprite) のパラメータ保存
+	j["spriteTransform"] = spriteTransform;
+	j["showSprite"] = showSprite;
+	j["spriteTextureIndex"] = spriteTextureIndex;
+
+	// ファイルへの書き出し
+	std::ofstream file(filePath);
+	if (file.is_open()) {
+		file << j.dump(4); // インデント幅4で整形出力
+	}
+}
+
+void GameScene::LoadGameData(const std::string& filePath) {
+	std::ifstream file(filePath);
+	if (!file.is_open()) {
+		return; // セーブファイルが存在しない場合は読み込みをスキップ
+	}
+
+	json j;
+	file >> j;
+
+	// 1. 中央モデル (Plane) のパラメータ復元
+	if (j.contains("transform")) transform = j["transform"].get<Transform>();
+	if (j.contains("showModel")) showModel = j["showModel"].get<bool>();
+	if (j.contains("useMonsterBall")) useMonsterBall = j["useMonsterBall"].get<bool>();
+
+	// 2. 球体 (Sphere) のパラメータ復元
+	if (j.contains("sphereTransform")) sphereTransform = j["sphereTransform"].get<Transform>();
+	if (j.contains("showSphere")) showSphere = j["showSphere"].get<bool>();
+	if (j.contains("sphereRotate")) {
+		auto rot = j["sphereRotate"].get<std::vector<float>>();
+		if (rot.size() >= 3) {
+			sphereRotate[0] = rot[0];
+			sphereRotate[1] = rot[1];
+			sphereRotate[2] = rot[2];
+		}
+	}
+	if (j.contains("sphereTextureIndex")) sphereTextureIndex = j["sphereTextureIndex"].get<int>();
+
+	// 3. スプライト (Sprite) のパラメータ復元
+	if (j.contains("spriteTransform")) spriteTransform = j["spriteTransform"].get<Transform>();
+	if (j.contains("showSprite")) showSprite = j["showSprite"].get<bool>();
+	if (j.contains("spriteTextureIndex")) spriteTextureIndex = j["spriteTextureIndex"].get<int>();
 }

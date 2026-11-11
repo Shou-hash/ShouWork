@@ -123,4 +123,8 @@ private:
 	BlendMode planeBlendMode_ = kBlendModeNormal;  // 中央モデル (Plane) 用
 	BlendMode sphereBlendMode_ = kBlendModeNormal; // 球体 (Sphere) 用
 	BlendMode spriteBlendMode_ = kBlendModeNormal; // スプライト (Sprite) 用
+
+	// セーブ・ロード処理
+	void SaveGameData(const std::string& filePath = "save_data.json");
+	void LoadGameData(const std::string& filePath = "save_data.json");
 };
