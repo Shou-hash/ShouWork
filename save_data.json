@@ -1,0 +1,114 @@
+{
+    "lightColor": {
+        "w": 1.0,
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0
+    },
+    "lightIntensity": 1.0,
+    "planeBlendMode": 1,
+    "showModel": true,
+    "showSphere": true,
+    "showSprite": true,
+    "sphereBlendMode": 1,
+    "sphereRotate": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "sphereTextureIndex": 0,
+    "sphereTransform": {
+        "rotate": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "scale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+        },
+        "translate": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        }
+    },
+    "spriteBlendMode": 1,
+    "spriteTextureIndex": 0,
+    "spriteTransform": {
+        "rotate": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "scale": {
+            "x": 320.0,
+            "y": 180.0,
+            "z": 1.0
+        },
+        "translate": {
+            "x": 320.0,
+            "y": 180.0,
+            "z": 0.0
+        }
+    },
+    "transform": {
+        "rotate": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "scale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+        },
+        "translate": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        }
+    },
+    "uiLightDirection": [
+        0.0,
+        -1.0,
+        0.0
+    ],
+    "uiSphereUVRotate": 0.0,
+    "uiSphereUVScale": [
+        1.0,
+        1.0
+    ],
+    "uiSphereUVTranslate": [
+        0.0,
+        0.0
+    ],
+    "uiSpritePosition": [
+        320.0,
+        180.0
+    ],
+    "uiSpriteSize": [
+        320.0,
+        180.0
+    ],
+    "uiSpriteUVRotate": 0.0,
+    "uiSpriteUVScale": [
+        1.0,
+        1.0
+    ],
+    "uiSpriteUVTranslate": [
+        0.0,
+        0.0
+    ],
+    "uiUVRotate": 0.0,
+    "uiUVScale": [
+        1.0,
+        1.0
+    ],
+    "uiUVTranslate": [
+        0.0,
+        0.0
+    ],
+    "useMonsterBall": true
+}

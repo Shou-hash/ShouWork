@@ -24,17 +24,20 @@ public:
 	// ImGuiを描画
 	void DrawImGui();
 
+	// セーブ＆ロード処理
+	void SaveGameData(const std::string& filePath = "save_data.json");
+	void LoadGameData(const std::string& filePath = "save_data.json");
+
 private:
-	// ★ SrvManager 保持用ポインタ
+	// SrvManager 保持用ポインタ
 	SrvManager* srvManager_ = nullptr;
 
-	// ★ 共通 RootSignature 保持用ポインタ
+	// 共通 RootSignature 保持用ポインタ
 	ID3D12RootSignature* rootSignature_ = nullptr;
 
-	// ★ Key関連変数を削除し、Inputクラスのポインタを管理
+	// Inputクラスのポインタを管理
 	std::unique_ptr<Input> input_ = nullptr;
 
-	// 実体ではなくポインタに変更
 	DirectInput* gamePad = nullptr;
 
 	DebugCamera debugCamera;
@@ -42,10 +45,10 @@ private:
 	Sound::SoundData soundData;
 	bool isDebugCamera = false;
 
-	//スプライトの切り取り設定用変数
-	Vector2 textureLeftTop = { 0.0f, 0.0f };   // 切り取り開始ピクセル座標 (x, y)
-	Vector2 textureCutSize = { 100.0f, 100.0f }; // 切り取るピクセルサイズ (w, h)
-	Vector2 textureSize = { 512.0f, 512.0f }; // テクスチャ全体のピクセルサイズ (W, H)
+	// スプライトの切り取り設定用変数
+	Vector2 textureLeftTop = { 0.0f, 0.0f };
+	Vector2 textureCutSize = { 100.0f, 100.0f };
+	Vector2 textureSize = { 512.0f, 512.0f };
 
 	// Particle クラスのインスタンス
 	std::unique_ptr<Particle> particle_ = nullptr;
@@ -120,11 +123,7 @@ private:
 	Matrix4x4 projectionMatrix;
 
 	// ブレンドモード変数
-	BlendMode planeBlendMode_ = kBlendModeNormal;  // 中央モデル (Plane) 用
-	BlendMode sphereBlendMode_ = kBlendModeNormal; // 球体 (Sphere) 用
-	BlendMode spriteBlendMode_ = kBlendModeNormal; // スプライト (Sprite) 用
-
-	// セーブ・ロード処理
-	void SaveGameData(const std::string& filePath = "save_data.json");
-	void LoadGameData(const std::string& filePath = "save_data.json");
+	BlendMode planeBlendMode_ = kBlendModeNormal;
+	BlendMode sphereBlendMode_ = kBlendModeNormal;
+	BlendMode spriteBlendMode_ = kBlendModeNormal;
 };

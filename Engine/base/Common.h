@@ -113,8 +113,11 @@ struct ModelData
 };
 
 // Vector3 や Transform の相互変換（マクロで定義）
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Vector2, x, y)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Vector3, x, y, z)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Vector4, x, y, z, w)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(struct Transform, scale, rotate, translate)
+
 
 // =========================================================
 // 5. 上記の構造体を使用する Engine ライブラリ群のインクルード
