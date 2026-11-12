@@ -1,9 +1,75 @@
+#define NOMINMAX
 #include "Particle.h"
 #include "Engine/2d/ImGuiManager.h"
 #include "Engine/Base/SrvManager.h"
+#include <algorithm>
+#include <cstdlib>
+
+namespace {
+	json Vector4ToJson(const Vector4& v) {
+		return json{ {"x", v.x}, {"y", v.y}, {"z", v.z}, {"w", v.w} };
+	}
+
+	Vector4 JsonToVector4(const json& j, const Vector4& fallback) {
+		if (!j.is_object()) {
+			return fallback;
+		}
+		return Vector4{
+			j.value("x", fallback.x),
+			j.value("y", fallback.y),
+			j.value("z", fallback.z),
+			j.value("w", fallback.w)
+		};
+	}
+
+	json PresetToJson(const ParticlePreset& p) {
+		return json{
+			{"name", p.name},
+			{"count", p.count},
+			{"background", Vector4ToJson(p.background)},
+			{"colorA", Vector4ToJson(p.colorA)},
+			{"colorB", Vector4ToJson(p.colorB)},
+			{"sizeMin", p.sizeMin},
+			{"sizeMax", p.sizeMax},
+			{"lifeMin", p.lifeMin},
+			{"lifeMax", p.lifeMax},
+			{"speedMin", p.speedMin},
+			{"speedMax", p.speedMax},
+			{"wind", p.wind},
+			{"turbulence", p.turbulence},
+			{"stretch", p.stretch},
+			{"mouseRadius", p.mouseRadius},
+			{"mouseForce", p.mouseForce},
+			{"additive", p.additive}
+		};
+	}
+
+	void JsonToPreset(const json& j, ParticlePreset& p) {
+		if (!j.is_object()) {
+			return;
+		}
+		p.name = j.value("name", p.name);
+		p.count = j.value("count", p.count);
+		if (j.contains("background")) p.background = JsonToVector4(j["background"], p.background);
+		if (j.contains("colorA")) p.colorA = JsonToVector4(j["colorA"], p.colorA);
+		if (j.contains("colorB")) p.colorB = JsonToVector4(j["colorB"], p.colorB);
+		p.sizeMin = j.value("sizeMin", p.sizeMin);
+		p.sizeMax = j.value("sizeMax", p.sizeMax);
+		p.lifeMin = j.value("lifeMin", p.lifeMin);
+		p.lifeMax = j.value("lifeMax", p.lifeMax);
+		p.speedMin = j.value("speedMin", p.speedMin);
+		p.speedMax = j.value("speedMax", p.speedMax);
+		p.wind = j.value("wind", p.wind);
+		p.turbulence = j.value("turbulence", p.turbulence);
+		p.stretch = j.value("stretch", p.stretch);
+		p.mouseRadius = j.value("mouseRadius", p.mouseRadius);
+		p.mouseForce = j.value("mouseForce", p.mouseForce);
+		p.additive = j.value("additive", p.additive);
+	}
+}
 
 // GPU専用の DEFAULT ヒープバッファ作成関数
-static ID3D12Resource* CreateGPUBufferResource(ID3D12Device* device, size_t sizeInBytes) {
+static Microsoft::WRL::ComPtr<ID3D12Resource> CreateGPUBufferResource(ID3D12Device* device, size_t sizeInBytes) {
 	D3D12_HEAP_PROPERTIES heapProps{};
 	heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
@@ -17,7 +83,7 @@ static ID3D12Resource* CreateGPUBufferResource(ID3D12Device* device, size_t size
 	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-	ID3D12Resource* resource = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
 	HRESULT hr = device->CreateCommittedResource(
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
@@ -28,6 +94,14 @@ static ID3D12Resource* CreateGPUBufferResource(ID3D12Device* device, size_t size
 	);
 	assert(SUCCEEDED(hr));
 	return resource;
+}
+
+Particle::~Particle() {
+	if (srvManager_ && hasDescriptors_) {
+		srvManager_->Free(uavIndex_);
+		srvManager_->Free(srvIndex_);
+		hasDescriptors_ = false;
+	}
 }
 
 void Particle::Initialize(
@@ -83,6 +157,15 @@ void Particle::Initialize(
 	srvIndex_ = srvManager->Allocate();
 	srvManager->CreateSRVforStructuredBuffer(srvIndex_, particleBufferResource_.Get(), kNumMaxInstance, sizeof(ParticleForGPU));
 	srvHandleGPU_ = srvManager->GetGPUDescriptorHandle(srvIndex_);
+	hasDescriptors_ = true;
+
+	// 6. 演出プリセット(無ければ既定値でJSONを書き出す)
+	InitDefaultPresets();
+	if (!LoadPresets(kPresetPath)) {
+		SavePresets(kPresetPath);
+	}
+	std::error_code ec;
+	lastWriteTime_ = std::filesystem::last_write_time(kPresetPath, ec);
 }
 
 void Particle::CreateComputePipeline(
@@ -121,6 +204,7 @@ void Particle::CreateComputePipeline(
 	assert(SUCCEEDED(hr));
 
 	IDxcBlob* csBlob = CompileShader(L"Engine/Shaders/Particle.CS.hlsl", L"cs_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
+	assert(csBlob != nullptr);
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc{};
 	computePsoDesc.pRootSignature = computeRootSignature_.Get();
@@ -190,6 +274,7 @@ void Particle::CreateRootSignatureAndPSO(
 
 	IDxcBlob* vertexShaderBlob = CompileShader(L"Engine/Shaders/Particle.VS.hlsl", L"vs_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
 	IDxcBlob* pixelShaderBlob = CompileShader(L"Engine/Shaders/Particle.PS.hlsl", L"ps_6_0", dxcUtils, dxcCompiler, dxcIncludeHandler);
+	assert(vertexShaderBlob != nullptr && pixelShaderBlob != nullptr);
 
 	D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
 	inputElementDescs[0].SemanticName = "POSITION";
@@ -233,21 +318,54 @@ void Particle::CreateRootSignatureAndPSO(
 
 	hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState_));
 	assert(SUCCEEDED(hr));
+
+	// 通常αブレンド版(砂・花びら・雨用)
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineStateAlpha_));
+	assert(SUCCEEDED(hr));
 }
 
 void Particle::Update(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+	// 約0.5秒ごとにJSONの更新を確認(ホットリロード)
+	if (hotReload_ && frame_ % 30 == 0) {
+		CheckHotReload();
+	}
+	++frame_;
+	time_ += 1.0f / 60.0f;
 	// ★ Compute ShaderでDescriptorTableを使う前に、DescriptorHeapをコマンドリストにセットする
 	ID3D12DescriptorHeap* descriptorHeaps[] = { srvManager_->GetDescriptorHeap() };
 	commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
 	// 定数バッファの更新
-	csConstantData_->viewProjection = Multiply(viewMatrix, projectionMatrix);
+	const int safeMode = std::clamp(mode_, 0, 3);
+	const ParticlePreset& pr = presets_[safeMode];
+	if (safeMode == 0) {
+		csConstantData_->viewProjection = Multiply(viewMatrix, projectionMatrix);
 
-	Matrix4x4 billboard = MakeIdentity4x4();
-	for (int i = 0; i < 3; ++i)
-		for (int j = 0; j < 3; ++j)
-			billboard.m[i][j] = viewMatrix.m[j][i];
-	csConstantData_->billboard = useBillboard_ ? billboard : MakeIdentity4x4();
+		Matrix4x4 billboard = MakeIdentity4x4();
+		for (int i = 0; i < 3; ++i)
+			for (int j = 0; j < 3; ++j)
+				billboard.m[i][j] = viewMatrix.m[j][i];
+		csConstantData_->billboard = useBillboard_ ? billboard : MakeIdentity4x4();
+	}
+	else {
+		// 画面ピクセル座標(左上原点)をそのままクリップ空間へ。zは0.5固定(背景は0.99)
+		Matrix4x4 vp = MakeIdentity4x4();
+		vp.m[0][0] = 2.0f / WinApp::kWindowWidth;
+		vp.m[1][1] = -2.0f / WinApp::kWindowHeight;
+		vp.m[2][2] = 0.0f;
+		vp.m[3][0] = -1.0f;
+		vp.m[3][1] = 1.0f;
+		vp.m[3][2] = 0.5f;
+		csConstantData_->viewProjection = vp;
+		csConstantData_->billboard = MakeIdentity4x4();
+	}
+
+	// 稲光(嵐のみ): ランダムに光って減衰
+	flash_ = (safeMode == 3) ? std::max(0.0f, flash_ - 0.04f) : 0.0f;
+	if (safeMode == 3 && std::rand() % 300 == 0) {
+		flash_ = 1.0f;
+	}
 
 	csConstantData_->emitterPos = emitter_.transform.translate;
 	csConstantData_->deltaTime = 1.0f / 60.0f;
@@ -255,6 +373,32 @@ void Particle::Update(ID3D12GraphicsCommandList* commandList, const Matrix4x4& v
 	csConstantData_->maxParticles = kNumMaxInstance;
 	csConstantData_->fieldMin = useField_ ? accelerationField_.area.min : Vector3{ 1e10f, 1e10f, 1e10f };
 	csConstantData_->fieldMax = useField_ ? accelerationField_.area.max : Vector3{ -1e10f, -1e10f, -1e10f };
+
+	// モード1~3用パラメータ
+	csConstantData_->mode = static_cast<uint32_t>(safeMode);
+	csConstantData_->frame = frame_;
+	csConstantData_->activeCount = static_cast<uint32_t>(std::clamp(pr.count, 0, static_cast<int>(kNumMaxInstance)));
+	csConstantData_->reset = reset_ ? 1u : 0u;
+	reset_ = false;
+	csConstantData_->screenW = static_cast<float>(WinApp::kWindowWidth);
+	csConstantData_->screenH = static_cast<float>(WinApp::kWindowHeight);
+	csConstantData_->mouseX = mouseX_;
+	csConstantData_->mouseY = mouseY_;
+	csConstantData_->mouseRadius = pr.mouseRadius;
+	csConstantData_->mouseForce = pr.mouseForce;
+	csConstantData_->mouseDown = mouseDown_ ? 1.0f : 0.0f;
+	csConstantData_->time = time_;
+	csConstantData_->colorA = pr.colorA;
+	csConstantData_->colorB = pr.colorB;
+	csConstantData_->sizeMin = pr.sizeMin;
+	csConstantData_->sizeMax = std::max(pr.sizeMax, pr.sizeMin);
+	csConstantData_->lifeMin = std::max(pr.lifeMin, 0.1f); // 0だと毎フレーム作り直しになる
+	csConstantData_->lifeMax = std::max(pr.lifeMax, csConstantData_->lifeMin);
+	csConstantData_->speedMin = pr.speedMin;
+	csConstantData_->speedMax = std::max(pr.speedMax, pr.speedMin);
+	csConstantData_->wind = pr.wind;
+	csConstantData_->turbulence = pr.turbulence;
+	csConstantData_->stretch = pr.stretch;
 
 	// 1. リソースバリア: 初回は COMMON から UNORDERED_ACCESS へ遷移させる
 	D3D12_RESOURCE_BARRIER barrier{};
@@ -283,7 +427,9 @@ void Particle::Update(ID3D12GraphicsCommandList* commandList, const Matrix4x4& v
 }
 
 void Particle::Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU) {
-	commandList->SetPipelineState(pipelineState_.Get());
+	const int safeMode = std::clamp(mode_, 0, 3);
+	const bool additive = (safeMode == 0) || presets_[safeMode].additive;
+	commandList->SetPipelineState(additive ? pipelineState_.Get() : pipelineStateAlpha_.Get());
 	commandList->SetGraphicsRootSignature(rootSignature_.Get());
 
 	commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
@@ -296,6 +442,10 @@ void Particle::Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR
 
 void Particle::DrawImGui() {
 #ifdef USE_IMGUI
+	if (mode_ != 0) {
+		DrawPresetEditor();
+		return;
+	}
 	ImGui::Checkbox("useBillboard", &useBillboard_);
 	if (ImGui::CollapsingHeader("Emitter", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::DragFloat3("EmitterTranslate", &emitter_.transform.translate.x, 0.01f, -100.0f, 100.0f);
@@ -306,5 +456,120 @@ void Particle::DrawImGui() {
 		ImGui::DragFloat3("Area Min", &accelerationField_.area.min.x, 0.01f);
 		ImGui::DragFloat3("Area Max", &accelerationField_.area.max.x, 0.01f);
 	}
+#endif
+}
+
+void Particle::SetMode(int mode) {
+	mode = std::clamp(mode, 0, 3);
+	if (mode == mode_) {
+		return;
+	}
+	mode_ = mode;
+	reset_ = true; // 全粒を作り直す
+}
+
+Vector4 Particle::GetBackground() const {
+	const int safeMode = std::clamp(mode_, 0, 3);
+	Vector4 c = presets_[safeMode].background;
+	c.x += flash_ * 0.6f;
+	c.y += flash_ * 0.6f;
+	c.z += flash_ * 0.7f;
+	return c;
+}
+
+void Particle::InitDefaultPresets() {
+	//                 name      count  background                    colorA                         colorB                         size         life        speed          wind turb stretch  mRadius mForce additive
+	presets_[1] = { "Desert", 2500, { 0.80f, 0.62f, 0.36f, 1.0f }, { 0.95f, 0.80f, 0.55f, 0.25f }, { 1.00f, 0.90f, 0.70f, 0.55f }, 8.0f, 160.0f, 10.0f, 20.0f, 250.0f, 600.0f, 350.0f, 120.0f, 1.0f, 170.0f, 6000.0f, false };
+	presets_[2] = { "Spring Petals", 1200, { 0.55f, 0.78f, 0.95f, 1.0f }, { 1.00f, 0.72f, 0.80f, 0.95f }, { 1.00f, 0.88f, 0.92f, 1.00f }, 12.0f, 30.0f, 12.0f, 20.0f, 60.0f, 140.0f, 90.0f, 70.0f, 0.65f, 180.0f, 3500.0f, false };
+	presets_[3] = { "Night Storm", 6000, { 0.03f, 0.04f, 0.09f, 1.0f }, { 0.55f, 0.65f, 0.85f, 0.55f }, { 0.80f, 0.85f, 1.00f, 0.90f }, 2.0f, 4.5f, 20.0f, 20.0f, 1100.0f, 1700.0f, 120.0f, 60.0f, 14.0f, 200.0f, 0.0f, false };
+}
+
+bool Particle::LoadPresets(const std::string& path) {
+	std::ifstream file(path);
+	if (!file.is_open()) {
+		return false;
+	}
+	try {
+		json j;
+		file >> j;
+		if (!j.contains("presets") || !j["presets"].is_array()) {
+			return false;
+		}
+		const auto& arr = j["presets"];
+		for (size_t i = 0; i < arr.size() && i < 3; ++i) {
+			JsonToPreset(arr[i], presets_[i + 1]);
+		}
+	}
+	catch (...) {
+		return false; // 編集途中などの壊れたJSONは無視して現在値を維持
+	}
+	return true;
+}
+
+bool Particle::SavePresets(const std::string& path) const {
+	try {
+		json arr = json::array();
+		for (size_t i = 1; i < presets_.size(); ++i) {
+			arr.push_back(PresetToJson(presets_[i]));
+		}
+		json j;
+		j["presets"] = arr;
+
+		std::ofstream file(path);
+		if (!file.is_open()) {
+			return false;
+		}
+		file << j.dump(4);
+	}
+	catch (...) {
+		return false;
+	}
+	return true;
+}
+
+void Particle::CheckHotReload() {
+	std::error_code ec;
+	auto t = std::filesystem::last_write_time(kPresetPath, ec);
+	if (ec || t == lastWriteTime_) {
+		return;
+	}
+	// 読めなかった場合は時刻を更新せず、次回また試す
+	if (LoadPresets(kPresetPath)) {
+		lastWriteTime_ = t;
+	}
+}
+
+void Particle::DrawPresetEditor() {
+#ifdef USE_IMGUI
+	ParticlePreset& p = presets_[mode_];
+	ImGui::Text("Preset: %s", p.name.c_str());
+	ImGui::SliderInt("Count", &p.count, 0, static_cast<int>(kNumMaxInstance));
+	ImGui::ColorEdit4("Background", &p.background.x);
+	ImGui::ColorEdit4("Color A", &p.colorA.x);
+	ImGui::ColorEdit4("Color B", &p.colorB.x);
+	ImGui::DragFloatRange2("Size (px)", &p.sizeMin, &p.sizeMax, 0.5f, 0.5f, 600.0f);
+	ImGui::DragFloatRange2("Life (s)", &p.lifeMin, &p.lifeMax, 0.1f, 0.1f, 60.0f);
+	ImGui::DragFloatRange2("Speed", &p.speedMin, &p.speedMax, 5.0f, 0.0f, 3000.0f);
+	ImGui::DragFloat("Wind", &p.wind, 5.0f, -2000.0f, 2000.0f);
+	ImGui::DragFloat("Turbulence", &p.turbulence, 1.0f, 0.0f, 1000.0f);
+	ImGui::DragFloat("Stretch (H/W)", &p.stretch, 0.05f, 0.1f, 30.0f);
+	ImGui::DragFloat("Mouse Radius", &p.mouseRadius, 1.0f, 0.0f, 600.0f);
+	ImGui::DragFloat("Mouse Force", &p.mouseForce, 50.0f, 0.0f, 30000.0f);
+	ImGui::Checkbox("Additive Blend", &p.additive);
+	ImGui::Separator();
+	if (ImGui::Button("Save Presets")) {
+		SavePresets(kPresetPath);
+		std::error_code ec;
+		lastWriteTime_ = std::filesystem::last_write_time(kPresetPath, ec); // 自分の保存を再読込しない
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Load Presets")) {
+		LoadPresets(kPresetPath);
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Restart")) {
+		reset_ = true;
+	}
+	ImGui::Checkbox("Hot Reload (particle_presets.json)", &hotReload_);
 #endif
 }

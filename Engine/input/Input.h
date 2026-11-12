@@ -25,6 +25,10 @@ public:
     // キーのトリガー（押した瞬間）判定
     bool TriggerKey(uint8_t keyNumber) const;
 
+    // マウス座標(クライアント領域を1280x720基準に換算)と左ボタン
+    void GetMousePos(float& x, float& y) const;
+    bool PushMouseLeft() const;
+
     // キーバッファの取得（DebugCamera等で利用する場合）
     const BYTE* GetKeyBuffer() const { return key_; }
 
@@ -32,6 +36,7 @@ private:
     Microsoft::WRL::ComPtr<IDirectInput8> directInput_;
     Microsoft::WRL::ComPtr<IDirectInputDevice8> keyboard_;
 
+    HWND hwnd_ = nullptr;
     BYTE key_[256] = {};
     BYTE keyPre_[256] = {};
 };

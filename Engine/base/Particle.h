@@ -1,5 +1,6 @@
 #pragma once
 #include "Common.h"
+#include <array>
 
 class SrvManager;
 
@@ -28,6 +29,50 @@ struct ParticleCSConstant {
 	float pad0;
 	Vector3 fieldMax;
 	float pad1;
+
+	// ---- 以下 Particle.CS.hlsl と同じ並びで追加 ----
+	uint32_t mode;
+	uint32_t frame;
+	uint32_t activeCount;
+	uint32_t reset;
+	float screenW;
+	float screenH;
+	float mouseX;
+	float mouseY;
+	float mouseRadius;
+	float mouseForce;
+	float mouseDown;
+	float time;
+	Vector4 colorA;
+	Vector4 colorB;
+	float sizeMin;
+	float sizeMax;
+	float lifeMin;
+	float lifeMax;
+	float speedMin;
+	float speedMax;
+	float wind;
+	float turbulence;
+	float stretch;
+	float pad2[3];
+};
+
+// Editorで編集し、JSONに保存・ホットリロードされる演出パラメータ(モード1~3)
+struct ParticlePreset {
+	std::string name;
+	int count;
+	Vector4 background;   // 背景色(white1x1.pngに掛ける)
+	Vector4 colorA;       // 粒の色A(a = 基準アルファ)
+	Vector4 colorB;       // 粒の色B (AとBの間でランダム)
+	float sizeMin, sizeMax;   // 横幅(px)
+	float lifeMin, lifeMax;   // 寿命(秒)
+	float speedMin, speedMax; // 初速(px/s)
+	float wind;               // 風(px/s, +で右)
+	float turbulence;         // ゆらぎの強さ
+	float stretch;            // 縦/横の比(雨は縦長)
+	float mouseRadius;        // マウスの影響半径(px)
+	float mouseForce;         // マウスの押しのけ力
+	bool additive;            // true:加算 / false:通常α
 };
 
 struct Emitter {
@@ -51,7 +96,7 @@ public:
 	static const uint32_t kNumMaxInstance = 10240;
 
 	Particle() = default;
-	~Particle() = default;
+	~Particle();
 
 	void Initialize(
 		ID3D12Device* device,
@@ -65,6 +110,16 @@ public:
 	void Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU);
 	void DrawImGui();
 
+	// 演出モード: 0=従来(モデル+3D) / 1=砂漠 / 2=花びら / 3=嵐の夜
+	void SetMode(int mode);
+	int GetMode() const { return mode_; }
+	// マウス座標は画面ピクセル(左上原点, 1280x720)
+	void SetMouse(float x, float y, bool down) { mouseX_ = x; mouseY_ = y; mouseDown_ = down; }
+	Vector4 GetBackground() const;
+
+	bool LoadPresets(const std::string& path);
+	bool SavePresets(const std::string& path) const;
+
 private:
 	void CreateRootSignatureAndPSO(
 		ID3D12Device* device,
@@ -72,6 +127,10 @@ private:
 		IDxcCompiler3* dxcCompiler,
 		IDxcIncludeHandler* dxcIncludeHandler
 	);
+
+	void InitDefaultPresets();
+	void CheckHotReload();
+	void DrawPresetEditor();
 
 	void CreateComputePipeline(
 		ID3D12Device* device,
@@ -91,6 +150,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> particleBufferResource_;
 	uint32_t uavIndex_ = 0;
 	uint32_t srvIndex_ = 0;
+	bool hasDescriptors_ = false;
 	D3D12_GPU_DESCRIPTOR_HANDLE uavHandleGPU_{};
 	D3D12_GPU_DESCRIPTOR_HANDLE srvHandleGPU_{};
 
@@ -110,7 +170,21 @@ private:
 	// Graphics パイプライン
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineStateAlpha_; // 通常αブレンド版
 
 	SrvManager* srvManager_ = nullptr; // SrvManagerの保持用
 	bool isFirstUpdate_ = true;        // 初回バリア判定用
+
+	static constexpr const char* kPresetPath = "particle_presets.json";
+	std::array<ParticlePreset, 4> presets_{}; // [0]は未使用(従来モード)
+	int mode_ = 0;
+	bool reset_ = false;
+	uint32_t frame_ = 0;
+	float time_ = 0.0f;
+	float flash_ = 0.0f; // 稲光
+	float mouseX_ = -10000.0f;
+	float mouseY_ = -10000.0f;
+	bool mouseDown_ = false;
+	bool hotReload_ = true;
+	std::filesystem::file_time_type lastWriteTime_{};
 };

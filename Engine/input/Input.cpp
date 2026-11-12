@@ -1,7 +1,9 @@
 #include "Input.h"
 #include <cstring>
+#include "Engine/Base/WinApp.h"
 
 void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
+    hwnd_ = hwnd;
     HRESULT hr = DirectInput8Create(
         hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
         reinterpret_cast<void**>(directInput_.GetAddressOf()), nullptr);
@@ -33,4 +35,18 @@ bool Input::PushKey(uint8_t keyNumber) const {
 
 bool Input::TriggerKey(uint8_t keyNumber) const {
     return (key_[keyNumber] != 0) && (keyPre_[keyNumber] == 0);
+}
+void Input::GetMousePos(float& x, float& y) const {
+    POINT p{};
+    RECT rc{};
+    GetCursorPos(&p);
+    ScreenToClient(hwnd_, &p);
+    GetClientRect(hwnd_, &rc);
+    // ウィンドウをリサイズされてもスワップチェーン(1280x720)基準に直す
+    x = rc.right > 0 ? p.x * static_cast<float>(WinApp::kWindowWidth) / rc.right : 0.0f;
+    y = rc.bottom > 0 ? p.y * static_cast<float>(WinApp::kWindowHeight) / rc.bottom : 0.0f;
+}
+
+bool Input::PushMouseLeft() const {
+    return (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
 }

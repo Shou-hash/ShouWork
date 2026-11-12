@@ -24,6 +24,10 @@ public:
 	// ImGuiを描画
 	void DrawImGui();
 
+	// 単色背景(white1x1.png を画面全体に引き伸ばす)
+	void InitializeBackground(ID3D12Device* device);
+	void DrawBackground(ID3D12GraphicsCommandList* commandList);
+
 	// セーブ＆ロード処理
 	void SaveGameData(const std::string& filePath = "save_data.json");
 	void LoadGameData(const std::string& filePath = "save_data.json");
@@ -119,8 +123,19 @@ private:
 	std::shared_ptr<Model> planeModel;
 
 	// カメラ行列
-	Matrix4x4 viewMatrix;
-	Matrix4x4 projectionMatrix;
+	Matrix4x4 viewMatrix{};
+	Matrix4x4 projectionMatrix{};
+
+	// 演出モード (0:従来 / 1:砂漠 / 2:花びら / 3:嵐の夜) ※1~4キーでも切替
+	int sceneMode_ = 0;
+	D3D12_GPU_DESCRIPTOR_HANDLE whiteTextureHandle{};
+	Microsoft::WRL::ComPtr<ID3D12Resource> whiteTextureResource_;
+	uint32_t whiteSrvIndex_ = UINT32_MAX;
+	Microsoft::WRL::ComPtr<ID3D12Resource> bgVertexResource;
+	D3D12_VERTEX_BUFFER_VIEW bgVertexBufferView{};
+	Microsoft::WRL::ComPtr<ID3D12Resource> bgMaterialResource;
+	Material* bgMaterialData = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12Resource> bgWvpResource;
 
 	// ブレンドモード変数
 	BlendMode planeBlendMode_ = kBlendModeNormal;

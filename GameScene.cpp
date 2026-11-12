@@ -9,6 +9,11 @@ void GameScene::Finalize() {
 	if (soundManager) {
 		soundManager->SoundUnload(&soundData);
 	}
+	if (srvManager_ && whiteSrvIndex_ != UINT32_MAX) {
+		srvManager_->Free(whiteSrvIndex_);
+		whiteSrvIndex_ = UINT32_MAX;
+	}
+	particle_.reset();
 	delete gamePad;
 	gamePad = nullptr;
 }
@@ -32,6 +37,8 @@ void GameScene::Initialize() {
 	soundManager->SoundPlayWave(soundData);
 
 	debugCamera.Initialize();
+	viewMatrix = debugCamera.GetViewMatrix();
+	projectionMatrix = debugCamera.GetProjectionMatrix();
 
 	input_ = std::make_unique<Input>();
 	input_->Initialize(winApp->GetHInstance(), winApp->GetHwnd());
@@ -44,6 +51,8 @@ void GameScene::Initialize() {
 
 	particle_ = std::make_unique<Particle>();
 	particle_->Initialize(device, srvManager, dxcUtils, dxcCompiler, dxcIncludeHandler);
+
+	InitializeBackground(device);
 }
 
 void GameScene::InitializeResources(ID3D12Device* device, ID3D12GraphicsCommandList* commandList) {
@@ -202,33 +211,33 @@ void GameScene::LoadGameData(const std::string& filePath) {
 	file >> j;
 
 	// 1. 中央モデル (Plane) 復元
-	if (j.contains("transform")) transform = j["transform"].get<Transform>();
-	if (j.contains("showModel")) showModel = j["showModel"].get<bool>();
-	if (j.contains("useMonsterBall")) useMonsterBall = j["useMonsterBall"].get<bool>();
-	if (j.contains("planeBlendMode")) planeBlendMode_ = static_cast<BlendMode>(j["planeBlendMode"].get<int>());
+	if (j.contains("transform")) { transform = j["transform"].get<struct Transform>(); }
+	if (j.contains("showModel")) { showModel = j["showModel"].get<bool>(); }
+	if (j.contains("useMonsterBall")) { useMonsterBall = j["useMonsterBall"].get<bool>(); }
+	if (j.contains("planeBlendMode")) { planeBlendMode_ = static_cast<BlendMode>(j["planeBlendMode"].get<int>()); }
 	if (j.contains("uiUVScale")) { auto v = j["uiUVScale"].get<std::vector<float>>(); if (v.size() >= 2) { uiUVScale[0] = v[0]; uiUVScale[1] = v[1]; } }
-	if (j.contains("uiUVRotate")) uiUVRotate = j["uiUVRotate"].get<float>();
+	if (j.contains("uiUVRotate")) { uiUVRotate = j["uiUVRotate"].get<float>(); }
 	if (j.contains("uiUVTranslate")) { auto v = j["uiUVTranslate"].get<std::vector<float>>(); if (v.size() >= 2) { uiUVTranslate[0] = v[0]; uiUVTranslate[1] = v[1]; } }
 
 	// 2. 球体 (Sphere) 復元
-	if (j.contains("sphereTransform")) sphereTransform = j["sphereTransform"].get<Transform>();
-	if (j.contains("showSphere")) showSphere = j["showSphere"].get<bool>();
+	if (j.contains("sphereTransform")) { sphereTransform = j["sphereTransform"].get<struct Transform>(); }
+	if (j.contains("showSphere")) { showSphere = j["showSphere"].get<bool>(); }
 	if (j.contains("sphereRotate")) { auto v = j["sphereRotate"].get<std::vector<float>>(); if (v.size() >= 3) { sphereRotate[0] = v[0]; sphereRotate[1] = v[1]; sphereRotate[2] = v[2]; } }
-	if (j.contains("sphereTextureIndex")) sphereTextureIndex = j["sphereTextureIndex"].get<int>();
-	if (j.contains("sphereBlendMode")) sphereBlendMode_ = static_cast<BlendMode>(j["sphereBlendMode"].get<int>());
+	if (j.contains("sphereTextureIndex")) { sphereTextureIndex = j["sphereTextureIndex"].get<int>(); }
+	if (j.contains("sphereBlendMode")) { sphereBlendMode_ = static_cast<BlendMode>(j["sphereBlendMode"].get<int>()); }
 	if (j.contains("uiSphereUVScale")) { auto v = j["uiSphereUVScale"].get<std::vector<float>>(); if (v.size() >= 2) { uiSphereUVScale[0] = v[0]; uiSphereUVScale[1] = v[1]; } }
-	if (j.contains("uiSphereUVRotate")) uiSphereUVRotate = j["uiSphereUVRotate"].get<float>();
+	if (j.contains("uiSphereUVRotate")) { uiSphereUVRotate = j["uiSphereUVRotate"].get<float>(); }
 	if (j.contains("uiSphereUVTranslate")) { auto v = j["uiSphereUVTranslate"].get<std::vector<float>>(); if (v.size() >= 2) { uiSphereUVTranslate[0] = v[0]; uiSphereUVTranslate[1] = v[1]; } }
 
 	// 3. スプライト (Sprite) 復元
-	if (j.contains("spriteTransform")) spriteTransform = j["spriteTransform"].get<Transform>();
-	if (j.contains("showSprite")) showSprite = j["showSprite"].get<bool>();
-	if (j.contains("spriteTextureIndex")) spriteTextureIndex = j["spriteTextureIndex"].get<int>();
-	if (j.contains("spriteBlendMode")) spriteBlendMode_ = static_cast<BlendMode>(j["spriteBlendMode"].get<int>());
+	if (j.contains("spriteTransform")) { spriteTransform = j["spriteTransform"].get<struct Transform>(); }
+	if (j.contains("showSprite")) { showSprite = j["showSprite"].get<bool>(); }
+	if (j.contains("spriteTextureIndex")) { spriteTextureIndex = j["spriteTextureIndex"].get<int>(); }
+	if (j.contains("spriteBlendMode")) { spriteBlendMode_ = static_cast<BlendMode>(j["spriteBlendMode"].get<int>()); }
 	if (j.contains("uiSpritePosition")) { auto v = j["uiSpritePosition"].get<std::vector<float>>(); if (v.size() >= 2) { uiSpritePosition[0] = v[0]; uiSpritePosition[1] = v[1]; } }
 	if (j.contains("uiSpriteSize")) { auto v = j["uiSpriteSize"].get<std::vector<float>>(); if (v.size() >= 2) { uiSpriteSize[0] = v[0]; uiSpriteSize[1] = v[1]; } }
 	if (j.contains("uiSpriteUVScale")) { auto v = j["uiSpriteUVScale"].get<std::vector<float>>(); if (v.size() >= 2) { uiSpriteUVScale[0] = v[0]; uiSpriteUVScale[1] = v[1]; } }
-	if (j.contains("uiSpriteUVRotate")) uiSpriteUVRotate = j["uiSpriteUVRotate"].get<float>();
+	if (j.contains("uiSpriteUVRotate")) { uiSpriteUVRotate = j["uiSpriteUVRotate"].get<float>(); }
 	if (j.contains("uiSpriteUVTranslate")) { auto v = j["uiSpriteUVTranslate"].get<std::vector<float>>(); if (v.size() >= 2) { uiSpriteUVTranslate[0] = v[0]; uiSpriteUVTranslate[1] = v[1]; } }
 
 	// 4. ライト復元
@@ -241,6 +250,13 @@ void GameScene::LoadGameData(const std::string& filePath) {
 
 void GameScene::Update() {
 	input_->Update();
+
+	// 演出モード切替(1~4キー)
+	for (int i = 0; i < 4; ++i) {
+		if (input_->TriggerKey(static_cast<uint8_t>(DIK_1 + i))) {
+			sceneMode_ = i;
+		}
+	}
 
 	if (input_->TriggerKey(DIK_S)) {
 		SaveGameData();
@@ -278,8 +294,20 @@ void GameScene::Update() {
 	spriteUVTranslate.y = textureLeftTop.y / textureSize.y;
 	spriteMaterialData->uvTransform = MakeUVTransformMatrix(spriteUVScale, spriteUVRotate, spriteUVTranslate);
 
-	if (particle_ && showParticles) {
-		particle_->Update(ctx_.dxCommon->GetCommandList(), viewMatrix, projectionMatrix);
+	if (particle_) {
+		particle_->SetMode(sceneMode_);
+
+		float mx = 0.0f, my = 0.0f;
+		input_->GetMousePos(mx, my);
+		bool mouseDown = input_->PushMouseLeft();
+#ifdef USE_IMGUI
+		// ImGuiパネル上のマウスはパーティクルに影響させない
+		if (ImGui::GetIO().WantCaptureMouse) {
+			mx = my = -10000.0f;
+			mouseDown = false;
+		}
+#endif
+		particle_->SetMouse(mx, my, mouseDown);
 	}
 
 	transform.rotate.x = sphereRotate[0] * (std::numbers::pi_v<float> / 180.0f);
@@ -378,6 +406,11 @@ void GameScene::DrawImGui() {
 	if (ImGui::Button("Load Data", ImVec2(100, 25))) {
 		LoadGameData();
 	}
+	ImGui::Separator();
+
+	const char* sceneModeNames[] = { "0: Default (Models)", "1: Desert", "2: Spring Petals", "3: Night Storm" };
+	ImGui::Combo("Scene Mode (1-4 keys)", &sceneMode_, sceneModeNames, IM_ARRAYSIZE(sceneModeNames));
+	ImGui::TextUnformatted("Mode 1-3: mouse affects particles (L-click = stronger)");
 	ImGui::Separator();
 
 	if (ImGui::BeginTabBar("SceneControlTabBar")) {
@@ -562,6 +595,21 @@ void GameScene::DrawImGui() {
 void GameScene::Draw() {
 	ID3D12GraphicsCommandList* commandList = ctx_.dxCommon->GetCommandList();
 
+	// PreDraw() 後の開いているコマンドリストで Compute Shader を実行する
+	if (particle_ && (showParticles || sceneMode_ != 0)) {
+		particle_->Update(commandList, viewMatrix, projectionMatrix);
+	}
+
+	// モード1~3: モデルは一切描かず、背景とパーティクルだけ
+	if (sceneMode_ != 0) {
+		DrawBackground(commandList);
+		if (particle_) {
+			particle_->Draw(commandList, whiteTextureHandle);
+			commandList->SetGraphicsRootSignature(rootSignature_);
+		}
+		return;
+	}
+
 	for (auto& model : modelEntries) {
 		Model::PreDraw();
 		model->Draw();
@@ -624,4 +672,88 @@ void GameScene::Draw() {
 		commandList->IASetVertexBuffers(0, 1, &inst.vertexBufferView);
 		commandList->DrawInstanced(inst.vertexCount, 1, 0, 0);
 	}
+}
+
+void GameScene::InitializeBackground(ID3D12Device* device) {
+	// white1x1.png が存在すれば読み込み、無ければメモリ上で1x1白テクスチャを生成する
+	std::error_code ec;
+	if (std::filesystem::exists("Resources/white1x1.png", ec) && !ec) {
+		whiteTextureHandle = TextureManager::GetInstance()->LoadTextureAndCreateSRV("Resources/white1x1.png");
+	}
+	else {
+		D3D12_RESOURCE_DESC resourceDesc{};
+		resourceDesc.Width = 1;
+		resourceDesc.Height = 1;
+		resourceDesc.MipLevels = 1;
+		resourceDesc.DepthOrArraySize = 1;
+		resourceDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+		resourceDesc.SampleDesc.Count = 1;
+		resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+		D3D12_HEAP_PROPERTIES heapProperties{};
+		heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM;
+		heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+		heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+
+		HRESULT hr = device->CreateCommittedResource(
+			&heapProperties,
+			D3D12_HEAP_FLAG_NONE,
+			&resourceDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&whiteTextureResource_));
+		assert(SUCCEEDED(hr));
+
+		uint32_t whitePixel = 0xFFFFFFFF;
+		hr = whiteTextureResource_->WriteToSubresource(0, nullptr, &whitePixel, sizeof(uint32_t), sizeof(uint32_t));
+		assert(SUCCEEDED(hr));
+
+		whiteSrvIndex_ = srvManager_->Allocate();
+		srvManager_->CreateSRVforTexture2D(whiteSrvIndex_, whiteTextureResource_.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 1);
+		whiteTextureHandle = srvManager_->GetGPUDescriptorHandle(whiteSrvIndex_);
+	}
+
+	// クリップ空間(-1~1)いっぱいの板 = 1xのテクスチャを1280x720に引き伸ばす。
+	// z=0.99 でパーティクル(z=0.5)より奥。時計回りなのでカリングされない
+	const Vector3 n = { 0.0f, 0.0f, -1.0f };
+	VertexData v[6] = {
+		{ { -1.0f,  1.0f, 0.99f, 1.0f }, 0.0f, 0.0f, n },
+		{ {  1.0f,  1.0f, 0.99f, 1.0f }, 1.0f, 0.0f, n },
+		{ { -1.0f, -1.0f, 0.99f, 1.0f }, 0.0f, 1.0f, n },
+		{ { -1.0f, -1.0f, 0.99f, 1.0f }, 0.0f, 1.0f, n },
+		{ {  1.0f,  1.0f, 0.99f, 1.0f }, 1.0f, 0.0f, n },
+		{ {  1.0f, -1.0f, 0.99f, 1.0f }, 1.0f, 1.0f, n },
+	};
+	bgVertexResource = CreateBufferResource(device, sizeof(v));
+	bgVertexBufferView.BufferLocation = bgVertexResource->GetGPUVirtualAddress();
+	bgVertexBufferView.SizeInBytes = sizeof(v);
+	bgVertexBufferView.StrideInBytes = sizeof(VertexData);
+	VertexData* vertData = nullptr;
+	bgVertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertData));
+	std::memcpy(vertData, v, sizeof(v));
+
+	bgMaterialResource = CreateBufferResource(device, sizeof(Material));
+	bgMaterialResource->Map(0, nullptr, reinterpret_cast<void**>(&bgMaterialData));
+	bgMaterialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+	bgMaterialData->enableLighting = 0;
+	bgMaterialData->uvTransform = MakeIdentity4x4();
+
+	bgWvpResource = CreateBufferResource(device, sizeof(TransformationMatrix));
+	TransformationMatrix* wvp = nullptr;
+	bgWvpResource->Map(0, nullptr, reinterpret_cast<void**>(&wvp));
+	wvp->WVP = MakeIdentity4x4();
+	wvp->World = MakeIdentity4x4();
+}
+
+void GameScene::DrawBackground(ID3D12GraphicsCommandList* commandList) {
+	bgMaterialData->color = particle_->GetBackground();
+
+	BlendManager::GetInstance()->SetPipelineState(commandList, kBlendModeNormal);
+	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	commandList->SetGraphicsRootConstantBufferView(0, bgMaterialResource->GetGPUVirtualAddress());
+	commandList->SetGraphicsRootConstantBufferView(1, directionalLightResource->GetGPUVirtualAddress());
+	commandList->SetGraphicsRootConstantBufferView(2, bgWvpResource->GetGPUVirtualAddress());
+	commandList->SetGraphicsRootDescriptorTable(3, whiteTextureHandle);
+	commandList->IASetVertexBuffers(0, 1, &bgVertexBufferView);
+	commandList->DrawInstanced(6, 1, 0, 0);
 }
