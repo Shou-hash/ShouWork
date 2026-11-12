@@ -4,6 +4,8 @@ struct VertexShaderOutput
     float2 texcoord : TEXCOORD0;
     float3 normal : NORMAL;
     float4 color : COLOR0;
+    float mode : TEXCOORD1;
+    float seed : TEXCOORD2;
 };
 
 struct VertexShaderInput

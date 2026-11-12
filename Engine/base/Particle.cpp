@@ -471,6 +471,13 @@ void Particle::SetMode(int mode) {
 Vector4 Particle::GetBackground() const {
 	const int safeMode = std::clamp(mode_, 0, 3);
 	Vector4 c = presets_[safeMode].background;
+	if (safeMode == 1) {
+		// 砂嵐の突風に合わせて大気の霞み・明暗をわずかに揺らす
+		float haze = 0.03f * std::sin(time_ * 0.85f) + 0.015f * std::sin(time_ * 2.13f);
+		c.x = std::clamp(c.x + haze, 0.0f, 1.0f);
+		c.y = std::clamp(c.y + haze * 0.85f, 0.0f, 1.0f);
+		c.z = std::clamp(c.z + haze * 0.6f, 0.0f, 1.0f);
+	}
 	c.x += flash_ * 0.6f;
 	c.y += flash_ * 0.6f;
 	c.z += flash_ * 0.7f;
@@ -478,10 +485,10 @@ Vector4 Particle::GetBackground() const {
 }
 
 void Particle::InitDefaultPresets() {
-	//                 name      count  background                    colorA                         colorB                         size         life        speed          wind turb stretch  mRadius mForce additive
-	presets_[1] = { "Desert", 2500, { 0.80f, 0.62f, 0.36f, 1.0f }, { 0.95f, 0.80f, 0.55f, 0.25f }, { 1.00f, 0.90f, 0.70f, 0.55f }, 8.0f, 160.0f, 10.0f, 20.0f, 250.0f, 600.0f, 350.0f, 120.0f, 1.0f, 170.0f, 6000.0f, false };
-	presets_[2] = { "Spring Petals", 1200, { 0.55f, 0.78f, 0.95f, 1.0f }, { 1.00f, 0.72f, 0.80f, 0.95f }, { 1.00f, 0.88f, 0.92f, 1.00f }, 12.0f, 30.0f, 12.0f, 20.0f, 60.0f, 140.0f, 90.0f, 70.0f, 0.65f, 180.0f, 3500.0f, false };
-	presets_[3] = { "Night Storm", 6000, { 0.03f, 0.04f, 0.09f, 1.0f }, { 0.55f, 0.65f, 0.85f, 0.55f }, { 0.80f, 0.85f, 1.00f, 0.90f }, 2.0f, 4.5f, 20.0f, 20.0f, 1100.0f, 1700.0f, 120.0f, 60.0f, 14.0f, 200.0f, 0.0f, false };
+	//                 name            count  background                    colorA                         colorB                         size          life         speed           wind    turb   stretch mRadius mForce   additive
+	presets_[1] = { "Desert",        7500, { 0.76f, 0.58f, 0.35f, 1.0f }, { 0.74f, 0.52f, 0.29f, 0.42f }, { 0.97f, 0.84f, 0.62f, 0.72f }, 16.0f, 190.0f, 8.0f, 16.0f, 340.0f, 780.0f, 460.0f, 150.0f, 1.0f, 190.0f, 7500.0f, false };
+	presets_[2] = { "Spring Petals", 1200, { 0.55f, 0.78f, 0.95f, 1.0f }, { 1.00f, 0.72f, 0.80f, 0.95f }, { 1.00f, 0.88f, 0.92f, 1.00f }, 12.0f,  30.0f, 12.0f, 20.0f,  60.0f, 140.0f,  90.0f,  70.0f, 0.65f, 180.0f, 3500.0f, false };
+	presets_[3] = { "Night Storm",   6000, { 0.03f, 0.04f, 0.09f, 1.0f }, { 0.55f, 0.65f, 0.85f, 0.55f }, { 0.80f, 0.85f, 1.00f, 0.90f },  2.0f,   4.5f, 20.0f, 20.0f, 1100.0f, 1700.0f, 120.0f,  60.0f, 14.0f, 200.0f,    0.0f, false };
 }
 
 bool Particle::LoadPresets(const std::string& path) {

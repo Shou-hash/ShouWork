@@ -16,6 +16,11 @@ VertexShaderOutput main(VertexShaderInput input, uint32_t instanceId : SV_Instan
     
     // インスタンスごとの色を PixelShader に送る
     output.color = gParticle[instanceId].color;
+
+    // pad の整数部にモード、小数部に粒ごとのシードを格納
+    float encoded = gParticle[instanceId].pad;
+    output.mode = floor(encoded + 0.0001f);
+    output.seed = frac(encoded);
     
     return output;
 }
