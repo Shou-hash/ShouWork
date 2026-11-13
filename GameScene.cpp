@@ -36,12 +36,15 @@ void GameScene::Initialize() {
 	soundData = soundManager->SoundLoadWave("Resources/fanfare.wav");
 	soundManager->SoundPlayWave(soundData);
 
-	debugCamera.Initialize();
-	viewMatrix = debugCamera.GetViewMatrix();
-	projectionMatrix = debugCamera.GetProjectionMatrix();
-
 	input_ = std::make_unique<Input>();
 	input_->Initialize(winApp->GetHInstance(), winApp->GetHwnd());
+	input_->Update();
+
+	// 初期カメラ行列を確定させるため1回Updateを呼ぶ
+	debugCamera.Initialize();
+	debugCamera.Update(input_.get());
+	viewMatrix = debugCamera.GetViewMatrix();
+	projectionMatrix = debugCamera.GetProjectionMatrix();
 
 	gamePad = new DirectInput();
 	gamePad->Initialize();
@@ -300,14 +303,19 @@ void GameScene::Update() {
 		float mx = 0.0f, my = 0.0f;
 		input_->GetMousePos(mx, my);
 		bool mouseDown = input_->PushMouseLeft();
+		bool spaceDown = input_->PushKey(DIK_SPACE);
 #ifdef USE_IMGUI
 		// ImGuiパネル上のマウスはパーティクルに影響させない
 		if (ImGui::GetIO().WantCaptureMouse) {
 			mx = my = -10000.0f;
 			mouseDown = false;
 		}
+		if (ImGui::GetIO().WantCaptureKeyboard) {
+			spaceDown = false;
+		}
 #endif
 		particle_->SetMouse(mx, my, mouseDown);
+		particle_->SetTornado(spaceDown);
 	}
 
 	transform.rotate.x = sphereRotate[0] * (std::numbers::pi_v<float> / 180.0f);
