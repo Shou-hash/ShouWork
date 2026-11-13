@@ -254,8 +254,8 @@ void GameScene::LoadGameData(const std::string& filePath) {
 void GameScene::Update() {
 	input_->Update();
 
-	// 演出モード切替(1~4キー)
-	for (int i = 0; i < 4; ++i) {
+	// 演出モード切替(1~5キー)
+	for (int i = 0; i < 5; ++i) {
 		if (input_->TriggerKey(static_cast<uint8_t>(DIK_1 + i))) {
 			sceneMode_ = i;
 		}
@@ -416,9 +416,9 @@ void GameScene::DrawImGui() {
 	}
 	ImGui::Separator();
 
-	const char* sceneModeNames[] = { "0: Default (Models)", "1: Desert", "2: Spring Petals", "3: Night Storm" };
-	ImGui::Combo("Scene Mode (1-4 keys)", &sceneMode_, sceneModeNames, IM_ARRAYSIZE(sceneModeNames));
-	ImGui::TextUnformatted("Mode 1-3: mouse affects particles (L-click = stronger)");
+	const char* sceneModeNames[] = { "0: Default (Models)", "1: Desert", "2: Spring Petals", "3: Night Storm", "4: Snowscape" };
+	ImGui::Combo("Scene Mode (1-5 keys)", &sceneMode_, sceneModeNames, IM_ARRAYSIZE(sceneModeNames));
+	ImGui::TextUnformatted("Mode 1-4: mouse affects particles (L-click = stronger)");
 	ImGui::Separator();
 
 	if (ImGui::BeginTabBar("SceneControlTabBar")) {

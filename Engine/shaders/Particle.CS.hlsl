@@ -161,6 +161,28 @@ uint GetStormLayer(uint index)
     return 2u;
 }
 
+// 雪景色パーティクルの層判定 (0:遠景のボケ雪・冷気, 1:空中を舞う雪の結晶・綿雪, 2:地面に積もる雪原)
+uint GetSnowLayer(uint index)
+{
+    float r = float(index) / max(float(gCSConstant.activeCount), 1.0f);
+    if (r < 0.15f)
+        return 0u;
+    if (r < 0.74f)
+        return 1u;
+    return 2u;
+}
+
+// 雪原の地表高さ（画面下部に緩やかな雪の起伏を作る）
+float GetSnowGroundY(uint index, float x, float W, float H)
+{
+    float nx = x / max(W, 1.0f);
+    float drift1 = sin(nx * 6.283185f * 1.2f + 0.3f) * 14.0f;
+    float drift2 = cos(nx * 6.283185f * 2.8f - 0.7f) * 6.0f;
+    float surfaceY = H - 46.0f - drift1 - drift2;
+    float depth = FixedRand(index, 51) * 44.0f;
+    return min(surfaceY + depth, H - 3.0f);
+}
+
 // マウスによる気流干渉
 void ApplyMouse(inout ParticleForGPU p, float swirl, bool aerodynamic)
 {
@@ -254,6 +276,40 @@ void ApplyMouseToSettledPetals(inout ParticleForGPU p, uint index)
         p.velocity.y = -abs(kick) * lerp(0.5f, 1.05f, Rand(index, 33)) - 60.0f;
         p.position.y -= 4.0f;
         p.position.z = lerp(gCSConstant.speedMin, gCSConstant.speedMax, FixedRand(index, 34)) * 0.7f;
+        p.currentTime = min(p.currentTime, p.lifeTime * 0.45f);
+    }
+}
+
+// 地面に積もった雪に対するマウスの反応（移動するとパウダースノーが舞い上がる）
+void ApplyMouseToSettledSnow(inout ParticleForGPU p, uint index)
+{
+    float2 mouse = float2(gCSConstant.mouseX, gCSConstant.mouseY);
+    float2 d = p.position.xy - mouse;
+    float dist = length(d);
+    float r = gCSConstant.mouseRadius * 0.9f;
+    if (dist >= r)
+        return;
+
+    float2 mouseVel = float2(gCSConstant.mouseVelX, gCSConstant.mouseVelY);
+    float mouseSpeed = length(mouseVel);
+    float k = 1.0f - dist / r;
+
+    float triggerSpeed = (gCSConstant.mouseDown > 0.5f) ? 5.0f : 28.0f;
+    if (mouseSpeed > triggerSpeed || gCSConstant.mouseDown > 0.5f)
+    {
+        float2 dir = dist > 0.001f ? d / dist : float2(0.0f, -1.0f);
+        float boost = 1.0f + gCSConstant.mouseDown * 1.5f;
+        float kick = clamp(mouseSpeed * 0.35f, 70.0f, 380.0f) * k * boost;
+
+        // 積雪状態を解除してパウダースノーとして舞い上げる
+        p.velocity.z = 0.0f;
+        p.velocity.x = mouseVel.x * 0.42f * k + dir.x * kick + (Rand(index, 52) - 0.5f) * 110.0f;
+        p.velocity.y = -abs(kick) * lerp(0.45f, 0.95f, Rand(index, 53)) - 55.0f;
+        p.position.y -= 4.0f;
+        p.position.z = lerp(gCSConstant.speedMin, gCSConstant.speedMax, FixedRand(index, 54)) * 0.65f;
+        float powderS = lerp(4.0f, 9.0f, FixedRand(index, 55));
+        p.scale = float3(powderS, powderS, 0.85f);
+        p.pad = 9.0f + FixedRand(index, 9) * 0.45f;
         p.currentTime = min(p.currentTime, p.lifeTime * 0.45f);
     }
 }
@@ -435,6 +491,80 @@ void ApplyStormTornado(inout ParticleForGPU p, uint index, uint layer)
     }
 }
 
+// スペースキー押下中のオーロラ降臨＆無重力ダイヤモンドダスト演出（モード4:雪景色）
+void ApplySnowAuroraAndDiamondDust(inout ParticleForGPU p, uint index, uint layer)
+{
+    float dt = gCSConstant.deltaTime;
+    float t = gCSConstant.time;
+    float W = gCSConstant.screenW;
+    float H = gCSConstant.screenH;
+    float phase = float(index % 997u);
+
+    // オーロラカーテン（全体の約18%を夜空にゆらめく極光のベールにする）
+    if (index % 11u < 2u)
+    {
+        uint ribbonId = index % 2u; // 2重のオーロラ帯
+        float u = FixedRand(index, 61);
+        float xPos = lerp(-60.0f, W + 60.0f, u);
+
+        // 空間的に連続した波打ち（オーロラのカーテンのうねり）
+        float wave1 = sin(u * 7.5f + t * 0.85f + float(ribbonId) * 1.9f) * 52.0f;
+        float wave2 = cos(u * 15.0f - t * 1.35f + float(ribbonId) * 0.8f) * 22.0f;
+        float baseY = (ribbonId == 0u) ? H * 0.24f : H * 0.38f;
+        float ribbonH = lerp(120.0f, 230.0f, FixedRand(index, 62)) * (0.85f + 0.25f * sin(u * 9.0f + t * 1.6f));
+
+        p.position.x = xPos + sin(t * 0.9f + u * 6.0f) * 18.0f;
+        p.position.y = baseY + wave1 + wave2 + (FixedRand(index, 63) - 0.5f) * 28.0f;
+        p.velocity = float3(0.0f, 0.0f, 0.0f);
+
+        // エメラルドグリーン〜シアン〜バイオレットへ移ろう極光カラー
+        float shimmer = 0.5f + 0.5f * sin(u * 12.0f - t * 2.2f + float(ribbonId) * 2.4f);
+        float3 auroraGreen = float3(0.18f, 0.96f, 0.64f);
+        float3 auroraCyan = float3(0.28f, 0.78f, 1.00f);
+        float3 auroraViolet = float3(0.68f, 0.36f, 0.98f);
+        float3 col = lerp(auroraGreen, auroraCyan, shimmer);
+        col = lerp(col, auroraViolet, pow(saturate(sin(u * 5.0f + t * 0.7f)), 2.0f) * 0.65f);
+
+        float curtainW = lerp(22.0f, 44.0f, FixedRand(index, 64));
+        float alpha = (0.24f + 0.18f * shimmer) * (ribbonId == 0u ? 1.0f : 0.75f);
+        p.scale = float3(curtainW, ribbonH, alpha);
+        p.color = float4(col, 1.0f);
+        p.position.z = sin(u * 6.0f + t * 0.8f) * 0.14f; // カーテンのわずかな傾き
+        p.pad = 11.0f + FixedRand(index, 9) * 0.45f; // 11.x: オーロラシェーダー
+        p.currentTime = p.lifeTime * 0.5f;
+        return;
+    }
+
+    // 地面に積もっていた雪も静かに無重力浮遊を開始する
+    if (p.velocity.z > 0.5f)
+    {
+        p.velocity.z = 0.0f;
+        p.position.y -= 3.0f + Rand(index, 65) * 6.0f;
+        p.velocity.y = -lerp(18.0f, 55.0f, Rand(index, 66));
+        p.currentTime = min(p.currentTime, p.lifeTime * 0.35f);
+    }
+
+    // 無重力でゆっくりと天へ昇りながら左右にたゆたう
+    float driftX = sin(t * 1.15f + phase * 0.37f) * 32.0f + cos(t * 0.65f + p.position.y * 0.01f) * 18.0f;
+    float riseSpeed = lerp(24.0f, 78.0f, FixedRand(index, 67));
+    if (layer == 0u)
+    {
+        riseSpeed *= 0.6f;
+    }
+    float desiredVy = -riseSpeed + sin(t * 1.8f + phase) * 14.0f;
+    p.velocity.x += (driftX - p.velocity.x) * 2.2f * dt;
+    p.velocity.y += (desiredVy - p.velocity.y) * 2.5f * dt;
+
+    // 一部の雪粒をキラキラ輝くダイヤモンドダスト（十字の光の粒）へ変化させる
+    if (index % 3u == 0u && layer >= 1u)
+    {
+        float sparkleSize = lerp(9.0f, 20.0f, FixedRand(index, 68));
+        p.scale = float3(sparkleSize, sparkleSize, 0.95f);
+        p.color.rgb = lerp(float3(0.82f, 0.95f, 1.0f), float3(1.0f, 0.98f, 0.88f), FixedRand(index, 69));
+        p.pad = 10.0f + FixedRand(index, 9) * 0.45f; // 10.x: ダイヤモンドダストの十字光
+    }
+}
+
 // 粒の(再)生成。座標は画面ピクセル(左上原点)。
 // scale.z = 基準アルファ, position.z = 粒ごとの固有値, velocity.z = 堆積状態(0:飛翔 / 1:堆積)
 void Emit(inout ParticleForGPU p, uint index, bool fill)
@@ -550,7 +680,7 @@ void Emit(inout ParticleForGPU p, uint index, bool fill)
             p.pad = 2.05f + grainSeed * 0.4f;
         }
     }
-    else // 嵐: 霧・霧雨・豪雨の3層構造
+    else if (gCSConstant.mode == 3) // 嵐: 霧・霧雨・豪雨の3層構造
     {
         uint layer = GetStormLayer(index);
         float size = lerp(gCSConstant.sizeMin, gCSConstant.sizeMax, Rand(index, 1));
@@ -584,6 +714,52 @@ void Emit(inout ParticleForGPU p, uint index, bool fill)
             p.velocity = float3(gCSConstant.wind, speed, 0.0f);
             p.position.z = H - Rand(index, 7) * 130.0f - 8.0f; // 着地ライン
             p.pad = 3.0f + grainSeed * 0.45f;
+        }
+    }
+    else // mode 4: 雪景色 (遠景ボケ雪・舞い落ちる雪の結晶＆綿雪・銀世界の積雪)
+    {
+        uint layer = GetSnowLayer(index);
+        float size = lerp(gCSConstant.sizeMin, gCSConstant.sizeMax, Rand(index, 1));
+        float3 snowTint = lerp(float3(0.86f, 0.94f, 1.0f), float3(1.0f, 1.0f, 1.0f), Rand(index, 3));
+
+        if (layer == 0u)
+        {
+            // 層0: 遠景をゆっくり漂う淡いボケ雪と冷気
+            float s = lerp(16.0f, 46.0f, Rand(index, 1));
+            p.position.xy = float2(rx * (W + 300.0f) - 150.0f, fill ? ry * H : -s * 2.0f);
+            p.velocity = float3(gCSConstant.wind * 0.45f, speed * 0.48f, 0.0f);
+            p.scale = float3(s, s, col.a * 0.25f);
+            p.position.z = speed * 0.48f;
+            p.color.rgb = float3(0.84f, 0.93f, 1.0f);
+            p.pad = 9.0f + grainSeed * 0.45f; // 9.x: 柔らかい綿雪・ボケ雪シェーダー
+        }
+        else if (layer == 1u)
+        {
+            // 層1: 空中を静かに舞い降りる雪の結晶（六角形）とふわふわ綿雪
+            bool isCrystal = (index % 3u == 0u);
+            float s = isCrystal ? size * 1.35f : size * lerp(0.7f, 1.15f, Rand(index, 7));
+            p.position.xy = float2(rx * (W + 320.0f) - 160.0f, fill ? ry * H : -s * 2.0f);
+            p.velocity = float3(gCSConstant.wind, speed, 0.0f);
+            p.scale = float3(s, s, isCrystal ? min(col.a * 1.15f, 0.96f) : col.a * 0.85f);
+            p.position.z = speed;
+            p.color.rgb = snowTint;
+            p.pad = isCrystal ? (8.0f + grainSeed * 0.45f) : (9.0f + grainSeed * 0.45f);
+        }
+        else
+        {
+            // 層2: 地面に積もる雪原（銀世界を形成）
+            float xPos = rx * (W + 40.0f) - 20.0f;
+            float groundY = GetSnowGroundY(index, xPos, W, H);
+            float clumpW = lerp(14.0f, 32.0f, Rand(index, 1));
+            float clumpH = clumpW * lerp(0.42f, 0.68f, Rand(index, 7));
+            p.position.xy = float2(xPos, groundY);
+            p.velocity = float3(0.0f, 0.0f, 1.0f); // 1.0 = 地面に堆積中
+            p.scale = float3(clumpW, clumpH, min(col.a * 1.1f, 0.92f));
+            p.position.z = (Rand(index, 10) - 0.5f) * 0.25f;
+            p.lifeTime = lerp(18.0f, 34.0f, Rand(index, 6));
+            float depthShade = lerp(1.02f, 0.80f, FixedRand(index, 51));
+            p.color.rgb = lerp(float3(0.82f, 0.91f, 1.0f), float3(1.0f, 1.0f, 1.0f), 0.55f) * depthShade;
+            p.pad = 9.0f + grainSeed * 0.45f;
         }
     }
 }
@@ -749,83 +925,152 @@ bool Step(inout ParticleForGPU p, uint index)
         return p.position.y > H + 50.0f || p.position.x > W + 300.0f || p.position.x < -300.0f;
     }
 
-    // mode 3: 嵐の夜 (pad 3:雨 / 4:水しぶき / 5:水たまり波紋 / 6:霧 / 7:稲妻)
-    bool isStormTornado = gCSConstant.tornado > 0.5f;
-    if (isStormTornado)
+    if (gCSConstant.mode == 3)
     {
-        uint layer = GetStormLayer(index);
-        ApplyStormTornado(p, index, layer);
-        if (p.pad < 6.5f)
+        // mode 3: 嵐の夜 (pad 3:雨 / 4:水しぶき / 5:水たまり波紋 / 6:霧 / 7:稲妻)
+        bool isStormTornado = gCSConstant.tornado > 0.5f;
+        if (isStormTornado)
         {
+            uint layer = GetStormLayer(index);
+            ApplyStormTornado(p, index, layer);
+            if (p.pad < 6.5f)
+            {
+                p.position.xy += p.velocity.xy * dt;
+                return p.position.y < -220.0f || p.position.x < -350.0f || p.position.x > W + 350.0f;
+            }
+            return false;
+        }
+
+        // スペースキーを離した直後の稲妻パーティクルは雨に戻す
+        if (p.pad >= 6.5f)
+        {
+            return true;
+        }
+
+        if (p.pad >= 5.5f)
+        {
+            // 霧・雨雲の流れ
+            p.velocity.x = gCSConstant.wind * 2.2f + 160.0f + sin(t * 0.7f + phase) * 35.0f;
             p.position.xy += p.velocity.xy * dt;
-            return p.position.y < -220.0f || p.position.x < -350.0f || p.position.x > W + 350.0f;
+            float margin = p.scale.x * 0.8f + 100.0f;
+            return p.position.x > W + margin;
+        }
+
+        if (p.pad < 3.5f)
+        {
+            p.velocity.x = gCSConstant.wind + sin(t * 0.8f + phase) * gCSConstant.turbulence;
+            p.position.xy += p.velocity.xy * dt;
+
+            // マウスを中心とした円盤(半径=mouseRadius/2)に当たったら水しぶき
+            float2 dm = p.position.xy - float2(gCSConstant.mouseX, gCSConstant.mouseY);
+            float r = gCSConstant.mouseRadius * 0.5f;
+            bool hitMouse = dot(dm, dm) < r * r;
+            bool hitGround = p.position.y >= p.position.z;
+            if (hitMouse || hitGround)
+            {
+                if (hitGround && !hitMouse && (index % 4u == 0u))
+                {
+                    // 地面に着地した一部の雨粒は広がる水たまりの波紋になる
+                    p.pad = 5.0f + FixedRand(index, 9) * 0.45f;
+                    p.currentTime = 0.0f;
+                    p.lifeTime = 0.45f + Rand(index, 8) * 0.25f;
+                    p.velocity = float3(0.0f, 0.0f, 0.0f);
+                    p.scale = float3(10.0f, 4.0f, 0.65f);
+                    p.color = float4(0.75f, 0.85f, 1.0f, 1.0f);
+                }
+                else
+                {
+                    // 跳ね返る水しぶき
+                    p.pad = 4.0f + FixedRand(index, 9) * 0.45f;
+                    p.currentTime = 0.0f;
+                    p.lifeTime = 0.3f + Rand(index, 8) * 0.3f;
+                    p.velocity = float3((Rand(index, 9) - 0.5f) * 260.0f, -(80.0f + Rand(index, 10) * 260.0f), 0.0f);
+                    float s = hitMouse ? 12.0f : 7.0f;
+                    p.scale = float3(s, s, 0.9f);
+                    p.color = float4(0.8f, 0.9f, 1.0f, 1.0f);
+                }
+            }
+        }
+        else if (p.pad < 4.5f)
+        {
+            // 水しぶきの放物線運動
+            p.velocity.y += 900.0f * dt;
+            p.position.xy += p.velocity.xy * dt;
+        }
+        else
+        {
+            // 波紋リングの拡大
+            p.scale.x += 95.0f * dt;
+            p.scale.y += 38.0f * dt;
         }
         return false;
     }
 
-    // スペースキーを離した直後の稲妻パーティクルは雨に戻す
-    if (p.pad >= 6.5f)
+    // mode 4: 雪景色 (pad 8:雪の結晶 / 9:綿雪・積雪 / 10:ダイヤモンドダスト / 11:オーロラ)
+    uint snowLayer = GetSnowLayer(index);
+    bool isAuroraSpecial = gCSConstant.tornado > 0.5f;
+
+    // スペースキー押下中: オーロラ降臨＆無重力ダイヤモンドダスト演出
+    if (isAuroraSpecial)
+    {
+        ApplySnowAuroraAndDiamondDust(p, index, snowLayer);
+        if (p.pad < 10.5f)
+        {
+            p.position.xy += p.velocity.xy * dt;
+            return p.position.y < -120.0f || p.position.x < -250.0f || p.position.x > W + 250.0f;
+        }
+        return false;
+    }
+
+    // スペースキーを離した直後のオーロラ・ダイヤモンドダストは通常の雪へ戻す
+    if (p.pad >= 9.5f)
     {
         return true;
     }
 
-    if (p.pad >= 5.5f)
+    // 地面に積もった雪の処理
+    if (p.velocity.z > 0.5f)
     {
-        // 霧・雨雲の流れ
-        p.velocity.x = gCSConstant.wind * 2.2f + 160.0f + sin(t * 0.7f + phase) * 35.0f;
-        p.position.xy += p.velocity.xy * dt;
-        float margin = p.scale.x * 0.8f + 100.0f;
-        return p.position.x > W + margin;
-    }
-
-    if (p.pad < 3.5f)
-    {
-        p.velocity.x = gCSConstant.wind + sin(t * 0.8f + phase) * gCSConstant.turbulence;
-        p.position.xy += p.velocity.xy * dt;
-
-        // マウスを中心とした円盤(半径=mouseRadius/2)に当たったら水しぶき
-        float2 dm = p.position.xy - float2(gCSConstant.mouseX, gCSConstant.mouseY);
-        float r = gCSConstant.mouseRadius * 0.5f;
-        bool hitMouse = dot(dm, dm) < r * r;
-        bool hitGround = p.position.y >= p.position.z;
-        if (hitMouse || hitGround)
+        ApplyMouseToSettledSnow(p, index);
+        if (p.velocity.z > 0.5f)
         {
-            if (hitGround && !hitMouse && (index % 4u == 0u))
-            {
-                // 地面に着地した一部の雨粒は広がる水たまりの波紋になる
-                p.pad = 5.0f + FixedRand(index, 9) * 0.45f;
-                p.currentTime = 0.0f;
-                p.lifeTime = 0.45f + Rand(index, 8) * 0.25f;
-                p.velocity = float3(0.0f, 0.0f, 0.0f);
-                p.scale = float3(10.0f, 4.0f, 0.65f);
-                p.color = float4(0.75f, 0.85f, 1.0f, 1.0f);
-            }
-            else
-            {
-                // 跳ね返る水しぶき
-                p.pad = 4.0f + FixedRand(index, 9) * 0.45f;
-                p.currentTime = 0.0f;
-                p.lifeTime = 0.3f + Rand(index, 8) * 0.3f;
-                p.velocity = float3((Rand(index, 9) - 0.5f) * 260.0f, -(80.0f + Rand(index, 10) * 260.0f), 0.0f);
-                float s = hitMouse ? 12.0f : 7.0f;
-                p.scale = float3(s, s, 0.9f);
-                p.color = float4(0.8f, 0.9f, 1.0f, 1.0f);
-            }
+            p.currentTime -= dt * 0.78f;
+            return false;
         }
     }
-    else if (p.pad < 4.5f)
+
+    // 静かに舞い降りる雪の横揺れと気流
+    float2 snowAir = SampleAirFlow(p.position.xy, t * 0.45f);
+    float sway = sin(t * 1.35f + phase) * (gCSConstant.turbulence * 0.75f) + snowAir.x * 26.0f;
+    float gentleFloat = cos(t * 1.9f + phase * 1.1f) * 14.0f;
+    p.velocity.x += (gCSConstant.wind + sway - p.velocity.x) * 1.8f * dt;
+    p.velocity.y += (p.position.z + gentleFloat - p.velocity.y) * 1.5f * dt;
+    ApplyMouse(p, 0.55f, false);
+    p.position.xy += p.velocity.xy * dt;
+
+    // 空中の雪が地面に着地したら雪原として積もる
+    if (snowLayer >= 1u && p.velocity.y > 0.0f)
     {
-        // 水しぶきの放物線運動
-        p.velocity.y += 900.0f * dt;
-        p.position.xy += p.velocity.xy * dt;
+        float groundY = GetSnowGroundY(index, p.position.x, W, H);
+        if (p.position.y >= groundY)
+        {
+            bool insideScreen = (p.position.x >= -10.0f && p.position.x <= W + 10.0f);
+            if (insideScreen && (snowLayer == 2u || Rand(index, 57) < 0.50f))
+            {
+                p.position.y = groundY;
+                p.velocity = float3(0.0f, 0.0f, 1.0f);
+                float clumpW = lerp(13.0f, 28.0f, FixedRand(index, 58));
+                p.scale = float3(clumpW, clumpW * 0.52f, 0.90f);
+                p.position.z = (FixedRand(index, 59) - 0.5f) * 0.25f;
+                p.pad = 9.0f + FixedRand(index, 9) * 0.45f;
+                p.currentTime = 0.0f;
+                p.lifeTime = lerp(18.0f, 32.0f, Rand(index, 60));
+                return false;
+            }
+            return true;
+        }
     }
-    else
-    {
-        // 波紋リングの拡大
-        p.scale.x += 95.0f * dt;
-        p.scale.y += 38.0f * dt;
-    }
-    return false;
+    return p.position.y > H + 50.0f || p.position.x > W + 280.0f || p.position.x < -280.0f;
 }
 
 [numthreads(1024, 1, 1)]
@@ -886,7 +1131,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
     else
     {
-        // ===== モード1~3: 画面ピクセル座標で動く演出 =====
+        // ===== モード1~4: 画面ピクセル座標で動く演出 =====
         bool fill = reset || p.lifeTime == 0.0f; // 画面全体にばらまいて作る
         p.currentTime += gCSConstant.deltaTime;
 
@@ -899,7 +1144,36 @@ void main(uint3 DTid : SV_DispatchThreadID)
         drawScale = p.scale.xy;
         float t = p.currentTime;
         float fade;
-        if (gCSConstant.mode == 3)
+        if (gCSConstant.mode == 4)
+        {
+            // 雪景色モード (pad 8:結晶 / 9:綿雪・積雪 / 10:ダイヤモンドダスト / 11:オーロラ)
+            fade = saturate(min(t, p.lifeTime - t) / 0.6f);
+            if (p.pad >= 10.5f)
+            {
+                // オーロラカーテンのゆらめき
+                fade = 1.0f;
+                rotAngle = p.position.z;
+            }
+            else if (p.pad >= 9.5f)
+            {
+                // ダイヤモンドダストの瞬き（キラッと明滅・回転）
+                float twinkle = 0.45f + 0.55f * abs(sin(gCSConstant.time * 5.5f + float(index % 199u) * 0.31f));
+                fade *= twinkle;
+                rotAngle = gCSConstant.time * 1.4f + float(index % 314u) * 0.02f;
+            }
+            else if (p.velocity.z > 0.5f)
+            {
+                // 地面に積もった雪
+                rotAngle = p.position.z;
+            }
+            else if (p.pad < 8.5f)
+            {
+                // 舞い降りる雪の結晶はゆっくり回転しながらきらめく
+                float dirSign = (index % 2u == 0u) ? 1.0f : -1.0f;
+                rotAngle = gCSConstant.time * 1.25f * dirSign + float(index % 628u) * 0.01f;
+            }
+        }
+        else if (gCSConstant.mode == 3)
         {
             if (p.pad >= 6.5f)
             {

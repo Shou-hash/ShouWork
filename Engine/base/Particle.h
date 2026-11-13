@@ -59,7 +59,7 @@ struct ParticleCSConstant {
 	float mouseVelY;
 };
 
-// Editorで編集し、JSONに保存・ホットリロードされる演出パラメータ(モード1~3)
+// Editorで編集し、JSONに保存・ホットリロードされる演出パラメータ(モード1~4)
 struct ParticlePreset {
 	std::string name;
 	int count;
@@ -112,12 +112,12 @@ public:
 	void Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU);
 	void DrawImGui();
 
-	// 演出モード: 0=従来(モデル+3D) / 1=砂漠 / 2=花びら / 3=嵐の夜
+	// 演出モード: 0=従来(モデル+3D) / 1=砂漠 / 2=花びら / 3=嵐の夜 / 4=雪景色
 	void SetMode(int mode);
 	int GetMode() const { return mode_; }
 	// マウス座標は画面ピクセル(左上原点, 1280x720)
 	void SetMouse(float x, float y, bool down) { mouseX_ = x; mouseY_ = y; mouseDown_ = down; }
-	// 竜巻演出の有効フラグ(スペースキー押下中)
+	// 特殊演出の有効フラグ(スペースキー押下中)
 	void SetTornado(bool active) { tornado_ = active; }
 	Vector4 GetBackground() const;
 
@@ -180,7 +180,7 @@ private:
 	bool isFirstUpdate_ = true;        // 初回バリア判定用
 
 	static constexpr const char* kPresetPath = "particle_presets.json";
-	std::array<ParticlePreset, 4> presets_{}; // [0]は未使用(従来モード)
+	std::array<ParticlePreset, 5> presets_{}; // [0]は未使用(従来モード)
 	int mode_ = 0;
 	bool reset_ = false;
 	uint32_t frame_ = 0;

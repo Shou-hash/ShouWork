@@ -66,7 +66,7 @@ PixelShaderOutput main(VertexShaderOutput input)
         return output;
     }
 
-    // モード1~3: white1x1.png をベースにUVからリアルな形状・質感を生成
+    // モード1~4: white1x1.png をベースにUVからリアルな形状・質感を生成
     float2 uv = input.texcoord * 2.0f - 1.0f; // -1 ~ 1
     float shapeAlpha = 1.0f;
     float3 shade = float3(1.0f, 1.0f, 1.0f);
@@ -133,7 +133,7 @@ PixelShaderOutput main(VertexShaderOutput input)
             shade = float3(1.15f, 1.12f, 1.08f);
         }
     }
-    else
+    else if (input.mode < 7.5f)
     {
         // ===== モード3: 嵐の夜 (3:雨 / 4:水しぶき / 5:波紋 / 6:霧 / 7:稲妻) =====
         if (input.mode < 3.5f)
@@ -187,6 +187,72 @@ PixelShaderOutput main(VertexShaderOutput input)
             }
             shapeAlpha = core;
             shade = lerp(float3(0.75f, 0.92f, 1.35f), float3(1.6f, 1.65f, 1.8f), core);
+        }
+    }
+    else
+    {
+        // ===== モード4: 雪景色 (8:雪の結晶 / 9:綿雪・積雪 / 10:ダイヤモンドダスト / 11:オーロラ) =====
+        if (input.mode < 8.5f)
+        {
+            // 六角形の雪の結晶（スノーフレーク）
+            float dist = length(uv);
+            if (dist >= 1.0f)
+            {
+                discard;
+            }
+            float angle = atan2(uv.y, uv.x);
+            float sector = abs(frac(angle / 1.0471975f + 0.5f) - 0.5f) * 1.0471975f;
+            float2 p = float2(cos(sector), sin(sector)) * dist;
+
+            // 主軸と樹枝状のサブブランチ
+            float mainArm = smoothstep(0.11f, 0.02f, p.y) * smoothstep(0.95f, 0.65f, p.x);
+            float sub1 = smoothstep(0.08f, 0.015f, abs((p.x - 0.35f) * 0.65f - p.y)) * step(0.35f, p.x) * step(p.x, 0.72f);
+            float sub2 = smoothstep(0.07f, 0.015f, abs((p.x - 0.58f) * 0.65f - p.y)) * step(0.58f, p.x) * step(p.x, 0.88f);
+            float core = smoothstep(0.28f, 0.05f, dist);
+
+            shapeAlpha = saturate(max(max(mainArm, max(sub1, sub2)), core));
+            shade = lerp(float3(0.84f, 0.94f, 1.08f), float3(1.18f, 1.22f, 1.28f), core);
+        }
+        else if (input.mode < 9.5f)
+        {
+            // ふわふわの綿雪・積雪の塊
+            float dist = length(uv);
+            if (dist >= 1.0f)
+            {
+                discard;
+            }
+            float n = NoisePS(input.texcoord * 3.8f + input.seed * 17.0f);
+            float edge = dist + (n - 0.5f) * 0.16f;
+            if (edge >= 1.0f)
+            {
+                discard;
+            }
+            shapeAlpha = pow(saturate(1.0f - edge), 1.45f);
+            shade = lerp(float3(0.86f, 0.93f, 1.04f), float3(1.08f, 1.10f, 1.14f), saturate(0.6f - uv.y * 0.4f));
+        }
+        else if (input.mode < 10.5f)
+        {
+            // ダイヤモンドダスト（十字に輝く光の粒子）
+            float dist = length(uv);
+            if (dist >= 1.0f)
+            {
+                discard;
+            }
+            float glow = pow(saturate(1.0f - dist), 2.6f);
+            float crossX = pow(saturate(1.0f - abs(uv.y) * 5.5f), 2.0f) * saturate(1.0f - abs(uv.x));
+            float crossY = pow(saturate(1.0f - abs(uv.x) * 5.5f), 2.0f) * saturate(1.0f - abs(uv.y));
+            shapeAlpha = saturate(glow + (crossX + crossY) * 0.85f);
+            shade = float3(1.25f, 1.32f, 1.45f);
+        }
+        else
+        {
+            // オーロラカーテン（縦に伸びる極光の光の帯）
+            float horizFade = pow(saturate(1.0f - abs(uv.x)), 1.65f);
+            float vertFade = smoothstep(1.0f, 0.15f, abs(uv.y)) * smoothstep(-1.0f, 0.45f, uv.y);
+            float ray = NoisePS(float2(input.texcoord.x * 9.0f + input.seed * 31.0f, input.texcoord.y * 1.4f));
+            float fbm = FbmDust(float2(input.texcoord.x * 2.0f, input.texcoord.y * 0.6f), input.seed);
+            shapeAlpha = horizFade * vertFade * lerp(0.45f, 1.35f, ray * 0.6f + fbm * 0.4f);
+            shade = lerp(float3(0.85f, 1.05f, 1.0f), float3(1.25f, 1.35f, 1.30f), saturate(0.5f - uv.y * 0.5f));
         }
     }
 

@@ -126,7 +126,7 @@ private:
 	Matrix4x4 viewMatrix{};
 	Matrix4x4 projectionMatrix{};
 
-	// 演出モード (0:従来 / 1:砂漠 / 2:花びら / 3:嵐の夜) ※1~4キーでも切替
+	// 演出モード (0:従来 / 1:砂漠 / 2:花びら / 3:嵐の夜 / 4:雪景色) ※1~5キーでも切替
 	int sceneMode_ = 0;
 	D3D12_GPU_DESCRIPTOR_HANDLE whiteTextureHandle{};
 	Microsoft::WRL::ComPtr<ID3D12Resource> whiteTextureResource_;
