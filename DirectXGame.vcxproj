@@ -170,19 +170,19 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="Engine\base\ConvertString.cpp" />
     <ClCompile Include="Engine\base\DirectXCommon.cpp" />
     <ClCompile Include="Engine\base\Framework.cpp" />
+    <ClCompile Include="Engine\base\Particle.cpp" />
     <ClCompile Include="Engine\base\ResourceObject.cpp" />
     <ClCompile Include="Engine\base\SceneManager.cpp" />
     <ClCompile Include="Engine\base\SrvManager.cpp" />
     <ClCompile Include="Engine\base\WinApp.cpp" />
     <ClCompile Include="Engine\input\DirectInput.cpp" />
+    <ClCompile Include="Engine\input\Input.cpp" />
     <ClCompile Include="Engine\math\Matrix4x4.cpp" />
     <ClCompile Include="GameScene.cpp" />
-    <ClCompile Include="Engine\input\Input.cpp" />
     <ClCompile Include="main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
-    <ClCompile Include="Engine\base\Particle.cpp" />
     <ClCompile Include="MyGame.cpp" />
     <ClCompile Include="SceneFactory.cpp" />
     <ClCompile Include="TitleScene.cpp" />
@@ -201,15 +201,15 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="Engine\base\ConvertString.h" />
     <ClInclude Include="Engine\base\DirectXCommon.h" />
     <ClInclude Include="Engine\base\Framework.h" />
+    <ClInclude Include="Engine\base\Particle.h" />
     <ClInclude Include="Engine\base\ResourceObject.h" />
     <ClInclude Include="Engine\base\SceneManager.h" />
     <ClInclude Include="Engine\base\SrvManager.h" />
     <ClInclude Include="Engine\base\WinApp.h" />
     <ClInclude Include="Engine\input\DirectInput.h" />
+    <ClInclude Include="Engine\input\Input.h" />
     <ClInclude Include="Engine\math\Matrix4x4.h" />
     <ClInclude Include="GameScene.h" />
-    <ClInclude Include="Engine\input\Input.h" />
-    <ClInclude Include="Engine\base\Particle.h" />
     <ClInclude Include="MyGame.h" />
     <ClInclude Include="nlohmann\adl_serializer.hpp" />
     <ClInclude Include="nlohmann\byte_container_with_subtype.hpp" />
